@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# 运行时数据（rag.db、uploads/）
+backend/data/
+
+# 发布产物
+release/
+dist/
+build/
+*.spec
+
+# 临时与系统
+.DS_Store
+Thumbs.db
+.tmp*/

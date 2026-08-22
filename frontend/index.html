@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>兰台 · 本地知识库</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏛️</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">兰</span>
+    <div class="brand-text">
+      <h1>兰台</h1>
+      <p>本地知识库 · 检索增强问答</p>
+    </div>
+  </div>
+  <nav class="tabs">
+    <button class="tab active" data-view="chat">问答</button>
+    <button class="tab" data-view="docs">文档管理</button>
+  </nav>
+  <div class="actions">
+    <button id="btn-settings" class="icon-btn" title="设置">⚙</button>
+  </div>
+</header>
+
+<main>
+  <!-- 业务功能 · 问答 -->
+  <section id="view-chat" class="view active">
+    <div class="chat-box">
+      <textarea id="chat-input" rows="3" placeholder="请输入问题，例如：什么是兰台？知识库中有哪些文档？"></textarea>
+      <div class="chat-actions">
+        <span id="chat-status" class="status-line"></span>
+        <button id="btn-ask" class="primary">提问</button>
+      </div>
+    </div>
+    <div id="chat-answer" class="answer-box hidden"></div>
+    <div id="chat-sources" class="sources"></div>
+  </section>
+
+  <!-- 业务功能 · 文档管理 -->
+  <section id="view-docs" class="view">
+    <div class="docs-toolbar">
+      <button id="btn-upload" class="primary">上传文档</button>
+      <input type="file" id="file-input" multiple hidden
+             accept=".txt,.md,.pdf,.docx,.png,.jpg,.jpeg,.webp,.bmp,.gif">
+      <span class="hint">支持 txt / md / pdf / docx / 图片，单个 ≤ 20MB；解析完成后即可检索问答</span>
+    </div>
+    <table class="doc-table">
+      <thead>
+        <tr><th>名称</th><th>类型</th><th>大小</th><th>状态</th><th>切片数</th><th>上传时间</th><th>操作</th></tr>
+      </thead>
+      <tbody id="doc-tbody"></tbody>
+    </table>
+  </section>
+</main>
+
+<!-- 配置功能（设置图标进入，密码门禁） -->
+<div id="settings-overlay" class="overlay hidden">
+  <div class="panel">
+    <div class="panel-head">
+      <h2>设置</h2>
+      <button id="btn-close-settings" class="icon-btn" title="关闭">✕</button>
+    </div>
+
+    <div id="settings-gate" class="settings-gate">
+      <p class="gate-title">🔒 配置功能需要密码</p>
+      <input type="password" id="settings-password-input" placeholder="请输入配置密码（默认 Admin#123）">
+      <button id="btn-settings-verify" class="primary">进入配置</button>
+      <p class="gate-hint">首次使用默认密码 Admin#123，进入后可修改</p>
+    </div>
+
+    <div id="settings-body" class="hidden">
+      <nav class="settings-tabs">
+        <button class="stab active" data-stab="ai">AI 配置</button>
+        <button class="stab" data-stab="tokens">API Token</button>
+        <button class="stab" data-stab="password">修改密码</button>
+        <button class="stab" data-stab="about">关于</button>
+      </nav>
+
+      <div id="stab-ai" class="stab-body active">
+        <p class="hint">不同文件类型可配置不同的 AI 模型；问答与向量化模型全局生效。修改保存后立即生效。</p>
+        <div id="ai-cards"></div>
+        <div class="ai-save-row">
+          <button id="btn-save-ai" class="primary">保存 AI 配置</button>
+        </div>
+      </div>
+
+      <div id="stab-tokens" class="stab-body">
+        <div class="token-create">
+          <input id="token-name" placeholder="Token 名称，如：演示脚本">
+          <button id="btn-create-token" class="primary">生成 Token</button>
+        </div>
+        <div id="token-plain" class="token-plain hidden"></div>
+        <table class="doc-table">
+          <thead><tr><th>名称</th><th>前缀</th><th>创建时间</th><th>最后使用</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody id="token-tbody"></tbody>
+        </table>
+        <p class="hint">Token 用于外部程序调用问答接口（Authorization: Bearer &lt;token&gt;）。明文仅生成时展示一次。</p>
+      </div>
+
+      <div id="stab-password" class="stab-body">
+        <div class="form-row"><label>旧密码</label><input type="password" id="pw-old" autocomplete="off"></div>
+        <div class="form-row"><label>新密码（≥8 位）</label><input type="password" id="pw-new" autocomplete="new-password"></div>
+        <div class="form-row"><label>确认新密码</label><input type="password" id="pw-new2" autocomplete="new-password"></div>
+        <button id="btn-change-pw" class="primary">修改密码</button>
+      </div>
+
+      <div id="stab-about" class="stab-body">
+        <div id="about-info" class="about-info"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 源文件预览浮层 -->
+<div id="preview-overlay" class="overlay hidden">
+  <div class="panel preview-panel">
+    <div class="panel-head">
+      <h2 id="preview-title">预览</h2>
+      <button id="btn-close-preview" class="icon-btn" title="关闭">✕</button>
+    </div>
+    <div id="preview-body" class="preview-body"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+<script src="app.js"></script>
+</body>
+</html>
