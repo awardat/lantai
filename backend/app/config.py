@@ -20,9 +20,10 @@ def _base_dir() -> Path:
 
 
 def _frontend_dir() -> Path:
-    """前端静态目录：源码模式 = 项目根/frontend；冻结模式 = exe 目录/frontend。"""
+    """前端静态目录：源码模式 = 项目根/frontend；冻结模式 = 资源根(_internal)/frontend。"""
     if getattr(sys, "frozen", False):
-        return _base_dir() / "frontend"
+        bundle = Path(getattr(sys, "_MEIPASS", str(Path(sys.executable).resolve().parent)))
+        return bundle / "frontend"
     return Path(__file__).resolve().parent.parent.parent / "frontend"
 
 

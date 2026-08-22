@@ -354,7 +354,12 @@ function collectAiItem(key) {
   const card = document.querySelector(`.ai-card[data-key="${key}"]`);
   const item = { provider: "", base_url: "", api_key: "", model: "", prompt: "", temperature: 0.2 };
   card.querySelectorAll("[data-f]").forEach((el) => {
-    item[el.dataset.f] = el.type === "number" ? parseFloat(el.value) : el.value.trim();
+    if (el.type === "number") {
+      const v = parseFloat(el.value);
+      item[el.dataset.f] = Number.isFinite(v) ? v : 0.2;
+    } else {
+      item[el.dataset.f] = el.value.trim();
+    }
   });
   return item;
 }
