@@ -8,6 +8,9 @@ venv/
 # 运行时数据（rag.db、uploads/）
 backend/data/
 
+# 开发自测样例输出
+scripts/sample_docs/
+
 # 发布产物
 release/
 dist/
