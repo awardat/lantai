@@ -68,6 +68,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - ✅ 已执行：0.1.4（用户确认后实施）：供应商新增 OpenCode Go（本地代理，http://127.0.0.1:8787/v1）、DeepSeek 默认模型 deepseek-v4-flash、"测试"功能（连通性+模型清单可点击填入）、后端日志文件输出（每次启动新文件，保留 20 个）；0.1.4 修订（并入）：配置窗口尺寸修正（进入配置后大窗口固定、密码门禁小窗口自适应）、版本记录文件（docs/03-增长迭代/版本记录.md）。
 - ✅ 已执行：0.1.5（用户确认档位 3 开工后实施）：**SSE 流式输出**（/api/chat/stream：sources → delta → done，前端打字机渲染）、**对话历史**（conversations/messages 表 schema v2、会话 CRUD、携带最近 6 条历史上下文并入库、前端会话管理）、scripts/mock_ai_server.py 开发自测 Mock AI；全链路自测通过（Mock AI：上传→解析→流式问答→多轮历史），`release/lantai-0.1.5-windows-x64/` 验证可运行。
 - ✅ 已执行：0.1.6（用户确认整改方案后实施，N-M2 模型名经用户决策保留）：评审整改（代码与文档评审报告-v0.1.5.md）——N-M1 流式无效会话预校验 404、N-M3 文档描述修正、N-L1~N-L8 文档与代码同步、N-L9 会话重命名、N-L10 启用外键；N-L11/N-L12 延后；`release/lantai-0.1.6-windows-x64/` 验证可运行。
+- ✅ 已执行：0.1.7（用户确认后实施）：配置功能**自动保存**（AI 配置输入框焦点离开即保存、串行化提交、轻提示"已自动保存"、保留手动按钮）；OpenCode Go 默认 URL 改为官方端点 `https://opencode.ai/zen/go/v1`；`release/lantai-0.1.7-windows-x64/` 验证可运行。
 - ⏳ **等待用户确认**后再进入后续迭代（RBAC、多平台、Docker、档位 3 等均只入需求与文档）。
 
 ## 会话注意事项

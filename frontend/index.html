@@ -88,10 +88,11 @@
       </nav>
 
       <div id="stab-ai" class="stab-body active">
-        <p class="hint">不同文件类型可配置不同的 AI 模型；问答与向量化模型全局生效。修改保存后立即生效。</p>
+        <p class="hint">不同文件类型可配置不同的 AI 模型；问答与向量化模型全局生效。修改后焦点离开输入框即自动保存，立即生效。</p>
+        <div id="ai-autosave-status" class="autosave-status"></div>
         <div id="ai-cards"></div>
         <div class="ai-save-row">
-          <button id="btn-save-ai" class="primary">保存 AI 配置</button>
+          <button id="btn-save-ai" class="primary">立即保存全部</button>
         </div>
       </div>
 

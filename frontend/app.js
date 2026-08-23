@@ -503,7 +503,10 @@ function renderAiCards() {
   box.querySelectorAll(".ai-card-head").forEach((head) => {
     head.addEventListener("click", () => head.parentElement.classList.toggle("open"));
   });
-  // 供应商选择：自动填充 provider / base_url / 推荐模型，并提示能力不匹配
+  // 自动保存：输入框焦点离开（blur）即保存；供应商下拉 change 时先填充再保存
+  box.querySelectorAll("input[data-f], select[data-f]").forEach((el) => {
+    el.addEventListener("blur", autoSaveAi);
+  });
   box.querySelectorAll('select[data-v="vendor"]').forEach((sel) => {
     sel.addEventListener("change", () => {
       const card = sel.closest(".ai-card");
@@ -520,8 +523,36 @@ function renderAiCards() {
       note.textContent = v.capabilities.includes(cap)
         ? ""
         : `⚠ 该供应商不支持${CAP_LABELS[cap]}，请选择其他供应商（如通义/硅基流动）。`;
+      autoSaveAi(); // 供应商选择即时保存
     });
   });
+}
+
+/* 自动保存（0.1.7）：串行化 PUT，避免并发读改写竞争 */
+let aiSaveChain = Promise.resolve();
+let autoSaveTimer = null;
+
+function autoSaveAi() {
+  const items = {};
+  for (const key of AI_KEYS) items[key] = collectAiItem(key);
+  aiSaveChain = aiSaveChain
+    .then(() => api("/api/settings/ai", { method: "PUT", body: { items } }))
+    .then(() => {
+      showAutoSaved();
+      aiConfigCache = null; // 下次读取刷新脱敏值
+    })
+    .catch((e) => toast("自动保存失败：" + e.message, "error"));
+}
+
+function showAutoSaved() {
+  const el = $("#ai-autosave-status");
+  if (!el) return;
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  el.textContent = `✓ 已自动保存 ${hh}:${mm}`;
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(() => { el.textContent = ""; }, 4000);
 }
 
 function collectAiItem(key) {
@@ -569,16 +600,9 @@ function pickModel(key, model) {
   if (input) input.value = model;
 }
 
-$("#btn-save-ai").addEventListener("click", async () => {
-  const items = {};
-  for (const key of AI_KEYS) items[key] = collectAiItem(key);
-  try {
-    await api("/api/settings/ai", { method: "PUT", body: { items } });
-    toast("AI 配置已保存，立即生效。", "success");
-    await loadAiConfig();
-  } catch (e) {
-    toast(e.message, "error");
-  }
+$("#btn-save-ai").addEventListener("click", () => {
+  autoSaveAi();
+  toast("正在保存全部 AI 配置…", "info");
 });
 
 /* ---- API Token ---- */

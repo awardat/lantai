@@ -47,12 +47,12 @@ VENDORS: list[dict] = [
     },
     {
         "id": "opencode-go",
-        "name": "OpenCode Go（本地代理）",
+        "name": "OpenCode Go（官方）",
         "provider": "openai-compatible",
-        "base_url": "http://127.0.0.1:8787/v1",
+        "base_url": "https://opencode.ai/zen/go/v1",
         "capabilities": ["chat"],
         "models": {"chat": "deepseek-v4-flash"},
-        "note": "OpenCode Go 订阅的本地 OpenAI 兼容代理（opencode-go-proxy，默认端口 8787）；通常无需 API Key",
+        "note": "OpenCode Go/Zen 官方 OpenAI 兼容端点；需 OpenCode 账户 API Key（本地代理可自行改回 http://127.0.0.1:8787/v1）",
     },
     {
         "id": "moonshot",
