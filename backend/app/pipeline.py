@@ -50,9 +50,12 @@ def _extract_text(doc: dict, file_path: Path, st: Store) -> tuple[str, str]:
         text_parts.append(_describe_inline_images(file_path, st, skip_pages=set(ocr_pages), doc_id=doc.get("id")))
         text = "\n\n".join(p for p in text_parts if p and p.strip())
         if len(text.strip()) < config.PDF_TEXT_MIN_CHARS:
-            # 全部页面均无有效文本 → 判定为扫描件，整文档走 OCR
+            # 全部页面均无有效文本 → 判定为扫描件：先更新分类（失败时也不误导），再整文档走 OCR
+            st.set_document_category(doc.get("id"), "pdf_image")
             return _ocr_pdf(file_path, st), "pdf_image"
-        return text, category
+        # 含 OCR 内容（图片页）→ 分类归为 pdf_image（0.1.11：避免单页扫描件显示为"文字 PDF"）
+        final_category = "pdf_image" if ocr_pages else category
+        return text, final_category
     if category == "image":
         cfg = st.get_ai_config()["image"]
         raw = file_path.read_bytes()

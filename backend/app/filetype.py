@@ -153,8 +153,16 @@ def _layout_order(
 
 
 def pdf_extract_page_images(path: Path) -> list[tuple[int, bytes, str]]:
-    """提取 PDF 各页内嵌图片（扫描件通常为整页图）。返回 [(页码, 字节, media_type)]。"""
+    """提取 PDF 各页内嵌图片（扫描件通常为整页图）。返回 [(页码, 字节, media_type)]。
+
+    依赖 Pillow（pypdf 图片提取要求 `pip install pypdf[image]`）。
+    """
     from pypdf import PdfReader
+
+    try:
+        from PIL import Image  # noqa: F401  确保 pillow 可用
+    except ImportError as exc:
+        raise RuntimeError("PDF 图片提取需要 Pillow，请执行：pip install pillow（requirements 已包含）。") from exc
 
     reader = PdfReader(str(path))
     out: list[tuple[int, bytes, str]] = []

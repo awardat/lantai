@@ -63,7 +63,17 @@ class Handler(BaseHTTPRequestHandler):
 
         if self.path.endswith("/chat/completions"):
             messages = body.get("messages", [])
-            last_user = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
+            # 兼容视觉消息（content 为列表时只取文本部分，避免 base64 进入回复）
+            last_user = ""
+            for m in reversed(messages):
+                if m.get("role") != "user":
+                    continue
+                c = m["content"]
+                if isinstance(c, list):
+                    last_user = next((p.get("text", "") for p in c if p.get("type") == "text"), "")
+                else:
+                    last_user = c
+                break
             reply = f"（Mock 回复）已收到你的问题：「{last_user[:60]}」。这是兰台流式输出的模拟答案，用于开发自测。"
             reasoning = "（Mock 思维链）我正在分析问题，检索到的资料显示这是兰台知识库的自测场景，我将给出基于资料的模拟回答。"
             if body.get("stream"):
