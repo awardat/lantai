@@ -126,4 +126,10 @@ def preview_raw(doc_id: int):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="源文件缺失，无法预览。")
     media_type = filetype.mime_of(doc["ext"])
-    return FileResponse(file_path, media_type=media_type, filename=doc["name"])
+    # 0.1.13：inline 内联显示（iframe/浏览器原生 PDF 查看器），不再触发下载
+    return FileResponse(
+        file_path,
+        media_type=media_type,
+        filename=doc["name"],
+        content_disposition_type="inline",
+    )

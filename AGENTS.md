@@ -75,6 +75,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - ✅ 已执行：0.1.10（用户提出后实施）：**智能体日志**——独立文件 `data/logs/agent-<时间戳>.log`（JSON 行，保留 20 个）记录每次 AI 调用的提示词（图片占位）、思维链 reasoning_content、答案截断、token 用量、耗时、槽位/会话/文档上下文；流式与非流式均记录；`release/lantai-0.1.10-windows-x64/` 验证可运行。
 - ✅ 已执行：0.1.11（用户报告扫描件解析失败后修复）：安装 Pillow（pypdf 图片提取依赖）恢复扫描件页图提取与 OCR 通道；含 OCR 内容的 PDF 分类归 `pdf_image`（单页扫描件不再显示"文字 PDF"，失败时也先更新分类）；Mock 视觉回复不再拼入 base64；`release/lantai-0.1.11-windows-x64/` 验证可运行。
 - ✅ 已执行：0.1.12（用户确认整改方案后实施）：H1 `_ocr_pdf` 补 doc_id（扫描件+视觉不可用 NameError 修复）、H2 requirements 补 pdfminer.six、H3 config 版本同步、M1 日志挂载幂等提前返回、M2 数据库文档预留表清理、L1-L5 文档同步、L8 §9.2 复核；L6/L7 延后；`release/lantai-0.1.12-windows-x64/` 验证可运行。
+- ✅ 已执行：0.1.13（用户报告 PDF 预览触发下载后修复）：`preview/raw` 改为 `content_disposition_type="inline"`（iframe 浏览器原生查看器内联显示，不再触发下载）；`release/lantai-0.1.13-windows-x64/` 验证可运行。
 - ⏳ **等待用户确认**后再进入后续迭代（RBAC、多平台、Docker、档位 3 等均只入需求与文档）。
 
 ## 会话注意事项
