@@ -64,6 +64,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - ✅ 已执行：文档体系（docs/01-需求调研、docs/02-方案设计）、README.md、本文件更新。
 - ✅ 已执行：可运行原型 v0.1.1（前后端分离、按文件类型 AI 配置、配置密码门禁、API token、源文件 Web 预览、SQLite+numpy 向量检索），自测通过（上传/解析/检索/问答/预览/门禁/token/改密/限流/错误提示），编译版 `release/lantai-0.1.1-windows-x64/` 验证可运行。
 - ✅ 已执行：代码与文档评审（docs/05-质量评审/代码与文档评审报告-v0.1.1.md），用户确认后按报告修复并升版 **0.1.2**：S1 API Key 解密、H1 阻塞端点线程池化、M1 配置合并保存、L1-L9 文档与代码同步、维度保护、temperature 校验、spec 入库（scripts/build/）、lifespan 迁移；回归自测通过，`release/lantai-0.1.2-windows-x64/` 验证可运行。
+- ✅ 已执行：0.1.3（用户确认后实施）：AI 供应商预置（参考 dsh，7 个供应商预置 URL 与推荐模型，国产优先）、AI 配置界面固定尺寸+滚动条、需求变更记录（docs/04-风控管理/需求变更记录.md）、README 模型推荐表；`release/lantai-0.1.3-windows-x64/` 验证可运行。
 - ⏳ **等待用户确认**后再进入后续迭代（RBAC、多平台、Docker、档位 3 等均只入需求与文档）。
 
 ## 会话注意事项

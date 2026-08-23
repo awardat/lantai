@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 |------|------|
 | 产品名称 | 兰台（lantai）本地 RAG 知识库 |
-| 文档版本 | V1.1（对应应用 0.1.2） |
+| 文档版本 | V1.2（对应应用 0.1.3） |
 | 生成时间 | 2026-08-23 |
 | 数据来源 | 技术对接方案.md、PRD产品需求文档.md（§6）、数据库设计文档.md |
 | 适用范围 | 前端调用与外部程序集成（API token） |
@@ -264,9 +264,38 @@ curl -X POST http://127.0.0.1:8000/api/chat \
 ```json
 {
   "code": 0, "message": "ok",
-  "data": {"version": "0.1.2", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
+  "data": {"version": "0.1.3", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
 }
 ```
+
+### 4.8 预置 AI 供应商目录（免会话，V1.2 新增）
+
+`GET /api/settings/vendors` → 预置供应商列表（供配置界面下拉选择，自动填充 Base URL 与推荐模型）：
+
+```json
+{
+  "code": 0, "message": "ok",
+  "data": [
+    {
+      "id": "dashscope", "name": "阿里云通义千问（DashScope）",
+      "provider": "openai-compatible",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "capabilities": ["chat", "vision", "embedding"],
+      "models": {"chat": "qwen-plus", "vision": "qwen-vl-plus", "embedding": "text-embedding-v3"},
+      "note": "国产；OpenAI 兼容模式，含视觉与 embedding"
+    }
+  ]
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| id / name | 供应商标识与展示名 |
+| provider | 接入类型：`ollama` / `openai-compatible` |
+| base_url | 预置地址（OpenAI 兼容，自动补 `/v1`） |
+| capabilities | 能力：`chat` / `vision` / `embedding`（如 DeepSeek 仅 chat） |
+| models | 各能力推荐模型（chat / vision / embedding） |
+| note | 提示（国产标注、无 embedding 说明等） |
 
 ---
 

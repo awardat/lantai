@@ -172,3 +172,11 @@ def system_info():
             data_dir=str(config.DATA_DIR),
         ).model_dump()
     )
+
+
+@router.get("/vendors")
+def list_vendors():
+    """预置 AI 供应商目录（免会话）：供配置界面下拉选择，自动填充 URL 与推荐模型。"""
+    from ..vendors import VENDORS
+
+    return ok(VENDORS)

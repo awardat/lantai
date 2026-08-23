@@ -66,6 +66,22 @@ const AI_DESCS = {
   chat: "问答生成模型（全局）",
   embedding: "向量化模型（全局，如 bge-m3）",
 };
+// 槽位 → 供应商能力映射（用于推荐模型与能力提示）
+const SLOT_CAP = { text: "chat", office: "chat", pdf_text: "chat", image: "vision", pdf_image: "vision", chat: "chat", embedding: "embedding" };
+const CAP_LABELS = { chat: "问答/文字处理", vision: "图片理解/OCR", embedding: "向量化" };
+let vendorsCache = [];
+
+function normUrl(u) {
+  return String(u || "").trim().replace(/\/+$/, "");
+}
+
+async function loadVendors() {
+  try {
+    vendorsCache = await api("/api/settings/vendors");
+  } catch (e) {
+    vendorsCache = [];
+  }
+}
 
 /* ---------------- Tab 切换 ---------------- */
 document.querySelectorAll(".tab").forEach((btn) => {
@@ -239,6 +255,7 @@ async function openSettings() {
   $("#settings-gate").classList.remove("hidden");
   $("#settings-body").classList.add("hidden");
   $("#settings-password-input").value = "";
+  await loadVendors();
   // 探测会话是否有效
   try {
     await api("/api/settings/ai");
@@ -303,6 +320,11 @@ function renderAiCards() {
     const c = aiConfigCache[key] || {};
     const masked = c.api_key || "";
     const placeholder = masked ? `已保存 ${masked}（留空保持不变）` : "API Key（Ollama 可留空）";
+    const matched = vendorsCache.find((v) => normUrl(v.base_url) === normUrl(c.base_url)) || null;
+    const cap = SLOT_CAP[key];
+    const capNote = matched && !matched.capabilities.includes(cap)
+      ? `⚠ 该供应商不支持${CAP_LABELS[cap]}，请选择其他供应商（如通义/硅基流动）。`
+      : "";
     return `<div class="ai-card" data-key="${key}">
       <div class="ai-card-head">
         <span class="cat">${CATEGORY_LABELS[key]}</span>
@@ -310,16 +332,18 @@ function renderAiCards() {
         <span class="model-tag">${esc(c.model || "未配置")}</span>
       </div>
       <div class="ai-card-body">
+        <div class="cap-note">${esc(capNote)}</div>
         <div class="grid2">
           <div class="form-row">
-            <label>Provider</label>
-            <select data-f="provider">
-              <option value="ollama" ${c.provider === "ollama" ? "selected" : ""}>Ollama（本地）</option>
-              <option value="openai-compatible" ${c.provider === "openai-compatible" ? "selected" : ""}>OpenAI 兼容 API（云端）</option>
+            <label>供应商（选择后自动填充 URL 与推荐模型）</label>
+            <select data-v="vendor">
+              <option value="">自定义</option>
+              ${vendorsCache.map((v) => `<option value="${esc(v.id)}" ${matched && matched.id === v.id ? "selected" : ""}>${esc(v.name)}</option>`).join("")}
             </select>
+            <input type="hidden" data-f="provider" value="${esc(c.provider || "ollama")}">
           </div>
           <div class="form-row">
-            <label>Base URL</label>
+            <label>Base URL（可手动修改）</label>
             <input data-f="base_url" value="${esc(c.base_url || "")}" placeholder="如 http://127.0.0.1:11434 或 https://api.deepseek.com/v1">
           </div>
           <div class="form-row">
@@ -347,6 +371,25 @@ function renderAiCards() {
   }).join("");
   box.querySelectorAll(".ai-card-head").forEach((head) => {
     head.addEventListener("click", () => head.parentElement.classList.toggle("open"));
+  });
+  // 供应商选择：自动填充 provider / base_url / 推荐模型，并提示能力不匹配
+  box.querySelectorAll('select[data-v="vendor"]').forEach((sel) => {
+    sel.addEventListener("change", () => {
+      const card = sel.closest(".ai-card");
+      const key = card.dataset.key;
+      const v = vendorsCache.find((x) => x.id === sel.value);
+      if (!v) return;
+      const cap = SLOT_CAP[key];
+      card.querySelector('[data-f="provider"]').value = v.provider;
+      card.querySelector('[data-f="base_url"]').value = v.base_url;
+      const modelInput = card.querySelector('[data-f="model"]');
+      const rec = v.models[cap] || v.models.chat;
+      if (rec) modelInput.value = rec;
+      const note = card.querySelector(".cap-note");
+      note.textContent = v.capabilities.includes(cap)
+        ? ""
+        : `⚠ 该供应商不支持${CAP_LABELS[cap]}，请选择其他供应商（如通义/硅基流动）。`;
+    });
   });
 }
 

@@ -1,6 +1,6 @@
 # 兰台（lantai）· 本地 RAG 知识库
 
-> 版本 **0.1.2** ｜ 平台 **Windows x64**（MVP）｜ 单机部署 ｜ 无构建步骤，两步启动
+> 版本 **0.1.3** ｜ 平台 **Windows x64**（MVP）｜ 单机部署 ｜ 无构建步骤，两步启动
 
 ## 起名意境
 
@@ -20,7 +20,7 @@
 
 适合：个人知识管理、本地资料问答演示、企业内网离线知识库原型。
 
-## 功能一览（v0.1.2）
+## 功能一览（v0.1.3）
 
 | 模块 | 功能 |
 |------|------|
@@ -60,6 +60,18 @@ ollama pull llava:7b                            # 图片理解模型（可选；
 | 问答 | DeepSeek / OpenAI / 通义 / 智谱等 | `https://api.deepseek.com/v1`（模型 `deepseek-chat`） |
 | embedding | OpenAI / 通义等（**DeepSeek 官方无 embedding 接口**） | `https://api.openai.com/v1`（模型 `text-embedding-3-small`）或通义 `text-embedding-v3` |
 
+## 模型推荐（优先国产）
+
+| 用途 | 文件类型 / 功能 | 本地（Ollama） | 云端推荐（国产优先） |
+|------|----------------|----------------|----------------------|
+| 文字理解 | 文字文档 / Office / 文字 PDF 处理、知识问答 | `qwen2.5:7b` | DeepSeek `deepseek-chat` ｜ 通义 `qwen-plus` ｜ 智谱 `glm-4-plus` |
+| 图片理解 | 图片（视觉描述入库） | `qwen2.5vl:7b`（或 `llava:7b`） | 通义 `qwen-vl-plus` ｜ 智谱 `glm-4v-plus` ｜ 硅基流动 `Qwen/Qwen2.5-VL-7B-Instruct` |
+| OCR | 图片 PDF（扫描件识别） | `qwen2.5vl:7b`（或 `llava:7b`） | 通义 `qwen-vl-plus` ｜ 智谱 `glm-4v-plus` |
+| 向量化 | embedding（全局，所有文件入库） | `bge-m3` | 通义 `text-embedding-v3` ｜ 硅基流动 `BAAI/bge-m3` |
+
+> **提示**：DeepSeek、Kimi 官方 API **无 embedding 接口**，向量化请选通义 / 硅基流动 / 本地 `bge-m3`。
+> 设置页「AI 配置」的**供应商下拉**已预置以上供应商与 Base URL（Ollama、DeepSeek、通义、智谱、Kimi、硅基流动、OpenAI），选择后自动填充推荐模型，可手动修改。
+
 ## 用法
 
 ### 方式一：源码运行（开发/演示）
@@ -79,7 +91,7 @@ python -m uvicorn app.main:app --port 8000
 
 ### 方式二：编译版运行（release）
 
-解压 `release/lantai-0.1.2-windows-x64.zip`，运行目录内 `lantai.exe`，浏览器打开 http://127.0.0.1:8000。
+解压 `release/lantai-0.1.3-windows-x64.zip`，运行目录内 `lantai.exe`，浏览器打开 http://127.0.0.1:8000。
 
 > 数据（`rag.db`、上传源文件）保存在运行目录的 `data/` 下，整体拷贝目录即可迁移。
 
