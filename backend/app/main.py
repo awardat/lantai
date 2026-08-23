@@ -14,7 +14,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import config, security, store as store_mod
+from . import agent_log, config, security, store as store_mod
 from .store import Store
 
 logger = logging.getLogger("lantai")
@@ -25,6 +25,7 @@ async def lifespan(app: FastAPI):
     """启动初始化（L8 修复：以 lifespan 替代已废弃的 on_event）。"""
     config.ensure_dirs()
     _setup_file_logging()
+    agent_log.setup_agent_logging()
     st = Store()
     # 首次启动初始化：默认配置密码 / 会话密钥 / 版本号
     if not st.get_setting("admin_password_hash"):

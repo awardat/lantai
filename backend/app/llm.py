@@ -63,8 +63,21 @@ def _friendly_error(exc: Exception, base_url: str) -> str:
     return f"AI 调用失败：{exc}"
 
 
-def chat(item: AiItem, messages: list[dict], images: Optional[list[tuple[bytes, str]]] = None, timeout: int = config.TIMEOUT_CHAT) -> str:
-    """调用 chat/completions。images 为 [(图片字节, MIME)] 列表（视觉输入）。"""
+def chat(
+    item: AiItem,
+    messages: list[dict],
+    images: Optional[list[tuple[bytes, str]]] = None,
+    timeout: int = config.TIMEOUT_CHAT,
+    slot: str = "",
+    conv_id: Optional[int] = None,
+    doc_id: Optional[int] = None,
+) -> str:
+    """调用 chat/completions。images 为 [(图片字节, MIME)] 列表（视觉输入）。
+
+    智能体日志（0.1.10）：记录提示词、思维链（reasoning_content）、用量、耗时。
+    """
+    from . import agent_log
+
     base = normalize_base_url(item.base_url)
     payload: dict[str, Any] = {
         "model": item.model,
@@ -81,22 +94,50 @@ def chat(item: AiItem, messages: list[dict], images: Optional[list[tuple[bytes, 
     else:
         payload["messages"] = messages
 
+    import time
+
+    t0 = time.monotonic()
     try:
         with httpx.Client(timeout=timeout) as client:
             resp = client.post(f"{base}/chat/completions", json=payload, headers=_headers(item))
             resp.raise_for_status()
             data = resp.json()
-        content = data["choices"][0]["message"]["content"]
-        return content.strip() if content else "（模型返回为空）"
+        choice = data["choices"][0]["message"]
+        content = choice.get("content") or "（模型返回为空）"
+        reasoning = choice.get("reasoning_content")
+        usage = data.get("usage")
+        agent_log.log_call(
+            slot=slot, provider=item.provider, base_url=base, model=item.model,
+            messages=messages, reasoning=reasoning, answer=content, usage=usage,
+            duration_ms=int((time.monotonic() - t0) * 1000),
+            conv_id=conv_id, doc_id=doc_id,
+        )
+        return content.strip()
     except Exception as exc:  # noqa: BLE001
+        agent_log.log_call(
+            slot=slot, provider=item.provider, base_url=base, model=item.model,
+            messages=messages, ok=False, error=str(exc),
+            duration_ms=int((time.monotonic() - t0) * 1000),
+            conv_id=conv_id, doc_id=doc_id,
+        )
         raise RuntimeError(_friendly_error(exc, base)) from exc
 
 
-def chat_stream(item: AiItem, messages: list[dict], timeout: int = config.TIMEOUT_CHAT):
+def chat_stream(
+    item: AiItem,
+    messages: list[dict],
+    timeout: int = config.TIMEOUT_CHAT,
+    slot: str = "",
+    conv_id: Optional[int] = None,
+    doc_id: Optional[int] = None,
+):
     """流式调用 chat/completions（stream=true），逐 delta 产出文本片段（生成器）。
 
     SSE 流：`data: {"choices":[{"delta":{"content": "..."}}]}`，结束为 `data: [DONE]`。
+    智能体日志（0.1.10）：累积思维链（delta.reasoning_content）与答案，结束后记录。
     """
+    from . import agent_log
+
     base = normalize_base_url(item.base_url)
     payload: dict[str, Any] = {
         "model": item.model,
@@ -104,6 +145,11 @@ def chat_stream(item: AiItem, messages: list[dict], timeout: int = config.TIMEOU
         "stream": True,
         "messages": messages,
     }
+    import time
+
+    t0 = time.monotonic()
+    full_content: list[str] = []
+    full_reasoning: list[str] = []
     try:
         with httpx.Client(timeout=timeout) as client:
             with client.stream("POST", f"{base}/chat/completions", json=payload, headers=_headers(item)) as resp:
@@ -120,12 +166,29 @@ def chat_stream(item: AiItem, messages: list[dict], timeout: int = config.TIMEOU
                         break
                     try:
                         chunk = json.loads(data)
-                        delta = chunk["choices"][0]["delta"].get("content")
+                        delta = chunk["choices"][0]["delta"]
                     except Exception:
                         continue
-                    if delta:
-                        yield delta
+                    r = delta.get("reasoning_content")  # 思维链（如 DeepSeek-R1 系）
+                    if r:
+                        full_reasoning.append(r)
+                    c = delta.get("content")
+                    if c:
+                        full_content.append(c)
+                        yield c
+        agent_log.log_call(
+            slot=slot, provider=item.provider, base_url=base, model=item.model,
+            messages=messages, reasoning="".join(full_reasoning), answer="".join(full_content),
+            duration_ms=int((time.monotonic() - t0) * 1000),
+            conv_id=conv_id, doc_id=doc_id, stream=True,
+        )
     except Exception as exc:  # noqa: BLE001
+        agent_log.log_call(
+            slot=slot, provider=item.provider, base_url=base, model=item.model,
+            messages=messages, reasoning="".join(full_reasoning), answer="".join(full_content),
+            ok=False, error=str(exc), duration_ms=int((time.monotonic() - t0) * 1000),
+            conv_id=conv_id, doc_id=doc_id, stream=True,
+        )
         raise RuntimeError(_friendly_error(exc, base)) from exc
 
 

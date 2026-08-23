@@ -65,11 +65,18 @@ class Handler(BaseHTTPRequestHandler):
             messages = body.get("messages", [])
             last_user = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
             reply = f"（Mock 回复）已收到你的问题：「{last_user[:60]}」。这是兰台流式输出的模拟答案，用于开发自测。"
+            reasoning = "（Mock 思维链）我正在分析问题，检索到的资料显示这是兰台知识库的自测场景，我将给出基于资料的模拟回答。"
             if body.get("stream"):
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")
                 self.send_header("Cache-Control", "no-cache")
                 self.end_headers()
+                # 思维链（reasoning_content）先于内容输出
+                for ch in reasoning:
+                    chunk = json.dumps({"choices": [{"index": 0, "delta": {"reasoning_content": ch}}]}, ensure_ascii=False)
+                    self.wfile.write(f"data: {chunk}\n\n".encode("utf-8"))
+                    self.wfile.flush()
+                    time.sleep(DELAY)
                 for ch in reply:
                     chunk = json.dumps({"choices": [{"index": 0, "delta": {"content": ch}}]}, ensure_ascii=False)
                     self.wfile.write(f"data: {chunk}\n\n".encode("utf-8"))
@@ -82,7 +89,8 @@ class Handler(BaseHTTPRequestHandler):
                     {
                         "id": "mock-completion",
                         "object": "chat.completion",
-                        "choices": [{"index": 0, "message": {"role": "assistant", "content": reply}, "finish_reason": "stop"}],
+                        "choices": [{"index": 0, "message": {"role": "assistant", "reasoning_content": reasoning, "content": reply}, "finish_reason": "stop"}],
+                        "usage": {"prompt_tokens": 120, "completion_tokens": 80, "total_tokens": 200},
                     }
                 )
             return

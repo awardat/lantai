@@ -1,6 +1,6 @@
 # 兰台（lantai）· 本地 RAG 知识库
 
-> 版本 **0.1.9** ｜ 平台 **Windows x64**（MVP）｜ 单机部署 ｜ 无构建步骤，两步启动
+> 版本 **0.1.10** ｜ 平台 **Windows x64**（MVP）｜ 单机部署 ｜ 无构建步骤，两步启动
 
 ## 起名意境
 
@@ -20,7 +20,7 @@
 
 适合：个人知识管理、本地资料问答演示、企业内网离线知识库原型。
 
-## 功能一览（v0.1.9）
+## 功能一览（v0.1.10）
 
 | 模块 | 功能 |
 |------|------|
@@ -91,7 +91,7 @@ python -m uvicorn app.main:app --port 8000
 
 ### 方式二：编译版运行（release）
 
-解压 `release/lantai-0.1.9-windows-x64.zip`，运行目录内 `lantai.exe`，浏览器打开 http://127.0.0.1:8000。
+解压 `release/lantai-0.1.10-windows-x64.zip`，运行目录内 `lantai.exe`，浏览器打开 http://127.0.0.1:8000。
 
 > 数据（`rag.db`、上传源文件）保存在运行目录的 `data/` 下，整体拷贝目录即可迁移。
 
@@ -123,7 +123,7 @@ python -m uvicorn app.main:app --port 8000
 ## 常见问题
 
 - **问答报"无法连接 Ollama"**：确认 Ollama 已启动（托盘图标存在），或改配云端 API。
-- **日志位置**：每次启动生成新的日志文件 `backend/data/logs/lantai-<时间戳>.log`（编译版在运行目录 `data/logs/`），保留最近 20 个；排查问题时可查看。
+- **日志位置**：每次启动生成新的日志文件 `backend/data/logs/lantai-<时间戳>.log`（编译版在运行目录 `data/logs/`），保留最近 20 个；**智能体日志**（每次 AI 调用的提示词/思维链/用量）在 `data/logs/agent-<时间戳>.log`；排查问题时可查看。
 - **报"模型不存在/未拉取"**：执行 `ollama list` 检查，缺少则 `ollama pull <模型名>`。
 - **云端 embedding 报 404**：DeepSeek 官方 API 无 embeddings 接口，请将 embedding 换为 OpenAI/通义等或本地 bge-m3。
 - **忘记配置密码**：删除 `data/rag.db` 中 settings 表的密码记录或直接删除数据目录重新初始化（演示数据可重建）。

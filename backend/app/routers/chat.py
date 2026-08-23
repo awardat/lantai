@@ -76,7 +76,7 @@ def chat(body: ChatRequest, request: Request):
     cfg = store.get_ai_config()["chat"]
     messages = _build_messages(question, context, body.conversation_id, cfg)
     try:
-        answer = llm.chat(AiItem(**cfg), messages)
+        answer = llm.chat(AiItem(**cfg), messages, slot="chat", conv_id=body.conversation_id)
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -125,7 +125,7 @@ def chat_stream(body: ChatRequest, request: Request):
         yield _sse({"type": "sources", "sources": [Source(**s).model_dump() for s in sources]})
         try:
             answer_parts: list[str] = []
-            for delta in llm.chat_stream(AiItem(**cfg), messages):
+            for delta in llm.chat_stream(AiItem(**cfg), messages, slot="chat", conv_id=body.conversation_id):
                 answer_parts.append(delta)
                 yield _sse({"type": "delta", "content": delta})
         except RuntimeError as exc:

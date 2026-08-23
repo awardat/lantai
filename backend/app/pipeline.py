@@ -12,12 +12,19 @@ from . import chunker, config, embeddings, filetype, llm, store as store_mod
 from .store import Store
 
 
-def _vision_describe(cfg: dict, raw: bytes, mime: str, fallback_prompt: str) -> str:
+def _vision_describe(cfg: dict, raw: bytes, mime: str, fallback_prompt: str, slot: str = "", doc_id: int | None = None) -> str:
     from .schemas import AiItem
 
     item = AiItem(**cfg)
     prompt = (cfg.get("prompt") or "").strip() or fallback_prompt
-    return llm.chat(item, [{"role": "user", "content": prompt}], images=[(raw, mime)], timeout=config.TIMEOUT_VISION)
+    return llm.chat(
+        item,
+        [{"role": "user", "content": prompt}],
+        images=[(raw, mime)],
+        timeout=config.TIMEOUT_VISION,
+        slot=slot,
+        doc_id=doc_id,
+    )
 
 
 def _extract_text(doc: dict, file_path: Path, st: Store) -> tuple[str, str]:
@@ -38,9 +45,9 @@ def _extract_text(doc: dict, file_path: Path, st: Store) -> tuple[str, str]:
             else:
                 ocr_pages.append(i)
         if ocr_pages:
-            text_parts.append(_ocr_pdf_pages(file_path, st, ocr_pages))
+            text_parts.append(_ocr_pdf_pages(file_path, st, ocr_pages, doc_id=doc.get("id")))
         # R117③：文字 PDF 页内图片（图表）→ 视觉描述 + 页码绑定（跳过已 OCR 的图片页）
-        text_parts.append(_describe_inline_images(file_path, st, skip_pages=set(ocr_pages)))
+        text_parts.append(_describe_inline_images(file_path, st, skip_pages=set(ocr_pages), doc_id=doc.get("id")))
         text = "\n\n".join(p for p in text_parts if p and p.strip())
         if len(text.strip()) < config.PDF_TEXT_MIN_CHARS:
             # 全部页面均无有效文本 → 判定为扫描件，整文档走 OCR
@@ -50,13 +57,13 @@ def _extract_text(doc: dict, file_path: Path, st: Store) -> tuple[str, str]:
         cfg = st.get_ai_config()["image"]
         raw = file_path.read_bytes()
         mime = filetype.mime_of(doc["ext"])
-        return _vision_describe(cfg, raw, mime, "请描述这张图片的内容。"), category
+        return _vision_describe(cfg, raw, mime, "请描述这张图片的内容。", slot="image", doc_id=doc.get("id")), category
     if category == "pdf_image":
         return _ocr_pdf(file_path, st), category
     raise RuntimeError(f"不支持的文件类型：{doc.get('ext', '')}")
 
 
-def _describe_inline_images(file_path: Path, st: Store, skip_pages: set[int] | None = None) -> str:
+def _describe_inline_images(file_path: Path, st: Store, skip_pages: set[int] | None = None, doc_id: int | None = None) -> str:
     """文字 PDF 页内图片（图表/照片）→ 视觉模型描述，前缀标注页码（图题/引用绑定基础）。
 
     视觉模型不可用或图片缺失时跳过，不阻塞解析。
@@ -73,14 +80,14 @@ def _describe_inline_images(file_path: Path, st: Store, skip_pages: set[int] | N
     parts = []
     for page_no, data, mime in images:
         try:
-            desc = _vision_describe(cfg, data, mime, "请描述这张图片的内容，包括其中的文字。")
+            desc = _vision_describe(cfg, data, mime, "请描述这张图片的内容，包括其中的文字。", slot="image", doc_id=doc_id)
             parts.append(f"【图片（第 {page_no} 页）】{desc}")
         except Exception:
             continue  # 视觉模型不可用：跳过该图
     return "\n".join(parts)
 
 
-def _ocr_pdf_pages(file_path: Path, st: Store, page_nos: list[int]) -> str:
+def _ocr_pdf_pages(file_path: Path, st: Store, page_nos: list[int], doc_id: int | None = None) -> str:
     """对指定页码的页面图片执行 OCR（pdf_image 通道配置）。"""
     wanted = set(page_nos)
     try:
@@ -93,7 +100,7 @@ def _ocr_pdf_pages(file_path: Path, st: Store, page_nos: list[int]) -> str:
         if page_no not in wanted:
             continue
         try:
-            text = _vision_describe(cfg, data, mime, "请识别图片中的全部文字，保持原文顺序。")
+            text = _vision_describe(cfg, data, mime, "请识别图片中的全部文字，保持原文顺序。", slot="pdf_image", doc_id=doc_id)
             parts.append(f"【第 {page_no} 页】\n{text}")
         except Exception:
             continue
@@ -108,7 +115,7 @@ def _ocr_pdf(file_path: Path, st: Store) -> str:
         raise RuntimeError("未能从 PDF 中提取到页面图片，请确认文件内容为扫描图片。")
     parts = []
     for page_no, data, mime in images:
-        text = _vision_describe(cfg, data, mime, "请识别图片中的全部文字，保持原文顺序。")
+        text = _vision_describe(cfg, data, mime, "请识别图片中的全部文字，保持原文顺序。", slot="pdf_image", doc_id=doc_id)
         parts.append(f"【第 {page_no} 页】\n{text}")
     return "\n\n".join(parts)
 
