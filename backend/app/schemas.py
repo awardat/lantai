@@ -30,6 +30,25 @@ class Source(BaseModel):
 class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
     top_k: int = Field(5, ge=1, le=20)
+    conversation_id: Optional[int] = None  # 对话历史（0.1.5）：携带最近历史消息作为上下文
+
+
+class ConversationOut(BaseModel):
+    id: int
+    title: str
+    created_at: str
+    updated_at: str
+
+
+class ConversationCreate(BaseModel):
+    title: str = Field("新对话", max_length=100)
+
+
+class MessageOut(BaseModel):
+    id: int
+    role: str  # user | assistant
+    content: str
+    created_at: str
 
 
 class ChatResponse(BaseModel):

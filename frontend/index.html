@@ -29,6 +29,12 @@
 <main>
   <!-- 业务功能 · 问答 -->
   <section id="view-chat" class="view active">
+    <div class="conv-bar">
+      <button id="btn-new-conv" class="mini-btn">＋ 新建对话</button>
+      <select id="conv-select" class="conv-select" title="切换对话（历史消息作为上下文）"></select>
+      <button id="btn-del-conv" class="mini-btn danger">删除对话</button>
+    </div>
+    <div id="conv-messages" class="conv-messages"></div>
     <div class="chat-box">
       <textarea id="chat-input" rows="3" placeholder="请输入问题，例如：什么是兰台？知识库中有哪些文档？"></textarea>
       <div class="chat-actions">

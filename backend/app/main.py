@@ -123,10 +123,11 @@ def _unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
     )
 
 
-from .routers import chat, docs, settings  # noqa: E402
+from .routers import chat, conversations, docs, settings  # noqa: E402
 
 app.include_router(docs.router)
 app.include_router(chat.router)
+app.include_router(conversations.router)
 app.include_router(settings.router)
 
 if config.FRONTEND_DIR.exists():

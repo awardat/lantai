@@ -62,6 +62,26 @@ main { max-width: 980px; margin: 0 auto; padding: 24px 16px 60px; }
 .view.active { display: block; }
 
 /* 问答 */
+.conv-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.conv-select {
+  flex: 1; max-width: 420px; padding: 7px 10px; border: 1px solid var(--line);
+  border-radius: 8px; font-size: 13px; outline: none; background: var(--panel);
+}
+.conv-messages {
+  max-height: 300px; overflow-y: auto; margin-bottom: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.conv-empty { color: var(--ink-2); font-size: 12px; text-align: center; padding: 12px; }
+.msg { display: flex; flex-direction: column; max-width: 86%; }
+.msg.user { align-self: flex-end; align-items: flex-end; }
+.msg.assistant { align-self: flex-start; align-items: flex-start; }
+.msg-label { font-size: 11px; color: var(--ink-2); margin-bottom: 2px; }
+.msg-body {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 8px 12px; font-size: 13px; line-height: 1.7; white-space: pre-wrap; word-break: break-word;
+}
+.msg.user .msg-body { background: var(--brand); color: #fff; border-color: var(--brand); }
+
 .chat-box {
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 16px; box-shadow: var(--shadow);

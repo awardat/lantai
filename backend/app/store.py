@@ -74,6 +74,20 @@ CREATE TABLE IF NOT EXISTS api_tokens (
   revoked INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_tokens_revoked ON api_tokens(revoked);
+CREATE TABLE IF NOT EXISTS conversations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL DEFAULT '新对话',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  conversation_id INTEGER NOT NULL,
+  role TEXT NOT NULL,
+  content TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
 """
 
 
@@ -89,11 +103,12 @@ class Store:
         self._lock = threading.Lock()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
-            # 用 user_version 标记 schema 版本，避免每次实例化重复建表（L7）
+            # 用 user_version 标记 schema 版本，避免每次实例化重复建表（L7）；
+            # v2：新增 conversations / messages（对话历史，0.1.5）
             version = conn.execute("PRAGMA user_version").fetchone()[0]
-            if version < 1:
+            if version < 2:
                 conn.executescript(_SCHEMA)
-                conn.execute("PRAGMA user_version=1")
+                conn.execute("PRAGMA user_version=2")
 
     # ------------------------------------------------------------ 基础连接
     def _connect(self) -> sqlite3.Connection:
@@ -296,3 +311,54 @@ class Store:
                 )
                 conn.commit()
                 return cur.rowcount > 0
+
+    # ------------------------------------------------------------ 对话历史（0.1.5）
+    def create_conversation(self, title: str = "新对话") -> int:
+        now = _now()
+        return self._execute(
+            "INSERT INTO conversations (title, created_at, updated_at) VALUES (?,?,?)",
+            (title, now, now),
+        )
+
+    def list_conversations(self) -> list[dict]:
+        rows = self._query("SELECT * FROM conversations ORDER BY updated_at DESC")
+        return [dict(r) for r in rows]
+
+    def get_conversation(self, conv_id: int) -> Optional[dict]:
+        rows = self._query("SELECT * FROM conversations WHERE id=?", (conv_id,))
+        return dict(rows[0]) if rows else None
+
+    def delete_conversation(self, conv_id: int) -> bool:
+        with self._lock:
+            with self._connect() as conn:
+                conn.execute("DELETE FROM messages WHERE conversation_id=?", (conv_id,))
+                cur = conn.execute("DELETE FROM conversations WHERE id=?", (conv_id,))
+                conn.commit()
+                return cur.rowcount > 0
+
+    def add_message(self, conv_id: int, role: str, content: str) -> int:
+        now = _now()
+        with self._lock:
+            with self._connect() as conn:
+                cur = conn.execute(
+                    "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?,?,?,?)",
+                    (conv_id, role, content, now),
+                )
+                conn.execute("UPDATE conversations SET updated_at=? WHERE id=?", (now, conv_id))
+                conn.commit()
+                return cur.lastrowid
+
+    def list_messages(self, conv_id: int, limit: int = 200) -> list[dict]:
+        rows = self._query(
+            "SELECT * FROM messages WHERE conversation_id=? ORDER BY id ASC LIMIT ?",
+            (conv_id, limit),
+        )
+        return [dict(r) for r in rows]
+
+    def recent_messages(self, conv_id: int, max_count: int = 6) -> list[dict]:
+        """最近 max_count 条历史消息（升序），用于拼入问答上下文。"""
+        rows = self._query(
+            "SELECT * FROM messages WHERE conversation_id=? ORDER BY id DESC LIMIT ?",
+            (conv_id, max_count),
+        )
+        return [dict(r) for r in reversed(rows)]

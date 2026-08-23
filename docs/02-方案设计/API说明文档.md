@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 |------|------|
 | 产品名称 | 兰台（lantai）本地 RAG 知识库 |
-| 文档版本 | V1.3（对应应用 0.1.4） |
+| 文档版本 | V1.4（对应应用 0.1.5） |
 | 生成时间 | 2026-08-23 |
 | 数据来源 | 技术对接方案.md、PRD产品需求文档.md（§6）、数据库设计文档.md |
 | 适用范围 | 前端调用与外部程序集成（API token） |
@@ -137,6 +137,7 @@ curl -F "file=@./兰台简介.txt" http://127.0.0.1:8000/api/docs/upload
 |------|------|:---:|------|
 | question | string | 是 | 问题（1~2000 字） |
 | top_k | int | 否 | 检索切片数，默认 5（1~20） |
+| conversation_id | int | 否 | 会话 ID（0.1.5）：携带该会话最近 6 条消息作为上下文，回答后自动入库 |
 
 **请求示例**（外部程序调用，携带 token）：
 
@@ -167,9 +168,49 @@ curl -X POST http://127.0.0.1:8000/api/chat \
 
 `data.sources[]`：命中切片，按相似度降序；`score` 为余弦相似度（0~1，4 位小数）；前端可凭 `doc_id` 调预览接口。
 
-**错误示例**（AI 未就绪）：`502` `{"code":502,"message":"AI 服务不可用（503）：Ollama 服务未就绪或未安装，请确认已启动 Ollama（winget install Ollama.Ollama），或改配云端 Provider。","data":null}`
+**错误示例**（AI 未就绪）：`502` `{"code":502,"message":"AI 服务不可用（503）：本地 AI 服务未就绪或未启动（如 Ollama / OpenCode Go 代理），请确认服务已运行，或检查 Base URL 与网络。","data":null}`
 
-### 3.2 仅检索（调试/演示）
+### 3.2 流式问答（SSE，0.1.5 新增）
+
+`POST /api/chat/stream` —— 请求体同 3.1（`question` / `top_k` / `conversation_id`）。
+
+响应为 `text/event-stream`，事件格式（每行 `data: <json>`，空行分隔）：
+
+| 事件类型 | 时机 | data 内容 |
+|----------|------|-----------|
+| `sources` | 检索完成后（首个事件） | `{"type":"sources","sources":[...]}` 命中切片列表 |
+| `delta` | 生成过程中（多个） | `{"type":"delta","content":"<文本片段>"}` 逐字/逐片段 |
+| `error` | 生成失败 | `{"type":"error","message":"<中文原因>"}` |
+| `done` | 结束（最后事件） | `{"type":"done"}` |
+
+**示例**：
+
+```bash
+curl -N -X POST http://127.0.0.1:8000/api/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"question": "什么是兰台？", "conversation_id": 1}'
+```
+
+```text
+data: {"type": "sources", "sources": [{"chunk_id": 1, "doc_id": 1, "doc_name": "兰台简介.txt", "category": "text", "chunk_text": "…", "score": 0.8731}]}
+
+data: {"type": "delta", "content": "兰"}
+
+data: {"type": "delta", "content": "台是…"}
+
+data: {"type": "done"}
+```
+
+### 3.3 对话历史（0.1.5 新增）
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/api/conversations` | POST | body `{"title": "新对话"}` → 创建会话 |
+| `/api/conversations` | GET | 会话列表（按更新时间倒序） |
+| `/api/conversations/{id}/messages` | GET | 会话消息列表（role: user/assistant） |
+| `/api/conversations/{id}` | DELETE | 删除会话（级联消息） |
+
+### 3.4 仅检索（调试/演示）
 
 `GET /api/search?q=<检索词>&top_k=<n>` → `data` 为 sources 数组（同 3.1，无 answer）。
 

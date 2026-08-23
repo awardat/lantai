@@ -92,6 +92,43 @@ def chat(item: AiItem, messages: list[dict], images: Optional[list[tuple[bytes, 
         raise RuntimeError(_friendly_error(exc, base)) from exc
 
 
+def chat_stream(item: AiItem, messages: list[dict], timeout: int = config.TIMEOUT_CHAT):
+    """流式调用 chat/completions（stream=true），逐 delta 产出文本片段（生成器）。
+
+    SSE 流：`data: {"choices":[{"delta":{"content": "..."}}]}`，结束为 `data: [DONE]`。
+    """
+    base = normalize_base_url(item.base_url)
+    payload: dict[str, Any] = {
+        "model": item.model,
+        "temperature": item.temperature,
+        "stream": True,
+        "messages": messages,
+    }
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            with client.stream("POST", f"{base}/chat/completions", json=payload, headers=_headers(item)) as resp:
+                if resp.status_code != 200:
+                    exc = httpx.HTTPStatusError(
+                        f"HTTP {resp.status_code}", request=resp.request, response=resp
+                    )
+                    raise exc
+                for line in resp.iter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data)
+                        delta = chunk["choices"][0]["delta"].get("content")
+                    except Exception:
+                        continue
+                    if delta:
+                        yield delta
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(_friendly_error(exc, base)) from exc
+
+
 def list_models(item: AiItem) -> list[str]:
     """测试连接：GET {base}/models，返回模型 ID 列表。"""
     base = normalize_base_url(item.base_url)

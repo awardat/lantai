@@ -173,7 +173,82 @@ async function deleteDoc(id, name) {
   loadDocs();
 }
 
-/* ---------------- 问答 ---------------- */
+/* ---------------- 对话历史（0.1.5） ---------------- */
+let currentConvId = null;   // null = 未关联会话（提问时自动创建）
+
+async function loadConversations() {
+  try {
+    const convs = await api("/api/conversations");
+    const sel = $("#conv-select");
+    sel.innerHTML = `<option value="">（不关联会话）</option>` +
+      convs.map((c) => `<option value="${c.id}" ${currentConvId === c.id ? "selected" : ""}>${esc(c.title || ("对话 #" + c.id))}</option>`).join("");
+    if (currentConvId !== null && !convs.some((c) => c.id === currentConvId)) {
+      currentConvId = null;
+      $("#conv-messages").innerHTML = "";
+    }
+  } catch (e) {
+    if (e.status !== 401) toast(e.message, "error");
+  }
+}
+
+async function loadMessages(convId) {
+  const box = $("#conv-messages");
+  if (!convId) { box.innerHTML = ""; return; }
+  try {
+    const msgs = await api(`/api/conversations/${convId}/messages`);
+    box.innerHTML = msgs.map((m) =>
+      `<div class="msg ${m.role === "user" ? "user" : "assistant"}"><div class="msg-label">${m.role === "user" ? "我" : "兰台"}</div><div class="msg-body">${esc(m.content)}</div></div>`
+    ).join("") || '<div class="conv-empty">暂无消息，开始提问吧</div>';
+    box.scrollTop = box.scrollHeight;
+  } catch (e) {
+    toast(e.message, "error");
+  }
+}
+
+$("#btn-new-conv").addEventListener("click", async () => {
+  try {
+    const r = await api("/api/conversations", { method: "POST", body: { title: "新对话" } });
+    currentConvId = r.id;
+    $("#conv-messages").innerHTML = "";
+    $("#chat-answer").classList.add("hidden");
+    $("#chat-sources").innerHTML = "";
+    await loadConversations();
+    $("#chat-input").focus();
+  } catch (e) {
+    toast(e.message, "error");
+  }
+});
+
+$("#conv-select").addEventListener("change", async (e) => {
+  const v = e.target.value;
+  currentConvId = v ? parseInt(v, 10) : null;
+  $("#chat-answer").classList.add("hidden");
+  $("#chat-sources").innerHTML = "";
+  await loadMessages(currentConvId);
+});
+
+$("#btn-del-conv").addEventListener("click", async () => {
+  if (!currentConvId) { toast("请先选择要删除的对话。", "error"); return; }
+  if (!confirm("确定删除该对话及其全部消息吗？")) return;
+  try {
+    await api(`/api/conversations/${currentConvId}`, { method: "DELETE" });
+    currentConvId = null;
+    $("#conv-messages").innerHTML = "";
+    await loadConversations();
+    toast("对话已删除。", "success");
+  } catch (e) {
+    toast(e.message, "error");
+  }
+});
+
+async function ensureConversation(question) {
+  if (currentConvId !== null) return;
+  const r = await api("/api/conversations", { method: "POST", body: { title: "新对话" } });
+  currentConvId = r.id;
+  await loadConversations();
+}
+
+/* ---------------- 问答（SSE 流式） ---------------- */
 $("#btn-ask").addEventListener("click", ask);
 $("#chat-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(); }
@@ -185,15 +260,53 @@ async function ask() {
   const btn = $("#btn-ask");
   btn.disabled = true;
   $("#chat-status").textContent = "正在检索知识库并生成答案…";
-  $("#chat-answer").classList.add("hidden");
+  $("#chat-answer").classList.remove("hidden");
+  $("#chat-answer").innerHTML = `<div class="answer-label">答案</div><div class="answer-text"></div>`;
+  const answerEl = $("#chat-answer").lastElementChild;
+  answerEl.textContent = "";
   $("#chat-sources").innerHTML = "";
+
   try {
-    const r = await api("/api/chat", { method: "POST", body: { question: q, top_k: 5 } });
-    $("#chat-answer").classList.remove("hidden");
-    $("#chat-answer").innerHTML = `<div class="answer-label">答案</div><div></div>`;
-    $("#chat-answer").lastElementChild.textContent = r.answer;
-    renderSources(r.sources || []);
-    $("#chat-status").textContent = `检索到 ${(r.sources || []).length} 个相关切片`;
+    await ensureConversation(q); // 未关联会话时自动创建
+    const resp = await fetch("/api/chat/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: q, top_k: 5, conversation_id: currentConvId }),
+    });
+    if (!resp.ok || !resp.body) {
+      let msg = `请求失败（HTTP ${resp.status}）`;
+      try { const p = await resp.json(); if (p && p.message) msg = p.message; } catch (e) { /* ignore */ }
+      throw new Error(msg);
+    }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buf = "";
+    let sourceCount = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop() || "";
+      for (const line of lines) {
+        const t = line.trim();
+        if (!t.startsWith("data:")) continue;
+        let ev;
+        try { ev = JSON.parse(t.slice(5).trim()); } catch (e) { continue; }
+        if (ev.type === "sources") {
+          sourceCount = (ev.sources || []).length;
+          renderSources(ev.sources || []);
+        } else if (ev.type === "delta") {
+          answerEl.textContent += ev.content;
+        } else if (ev.type === "error") {
+          toast(ev.message, "error");
+        } else if (ev.type === "done") {
+          // done
+        }
+      }
+    }
+    $("#chat-status").textContent = sourceCount ? `检索到 ${sourceCount} 个相关切片` : "未检索到相关内容";
+    if (currentConvId) await loadMessages(currentConvId); // 刷新历史消息区
   } catch (e) {
     $("#chat-status").textContent = "";
     toast(e.message, "error");
@@ -550,3 +663,4 @@ async function loadAbout() {
 
 /* ---------------- 初始化 ---------------- */
 loadDocs();
+loadConversations();
