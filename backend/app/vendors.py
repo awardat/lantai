@@ -24,7 +24,7 @@ VENDORS: list[dict] = [
         "provider": "openai-compatible",
         "base_url": "https://api.deepseek.com/v1",
         "capabilities": ["chat"],
-        "models": {"chat": "deepseek-chat"},
+        "models": {"chat": "deepseek-v4-flash"},
         "note": "国产；官方 API 无 embedding 接口，向量化请用通义/硅基流动或本地 bge-m3",
     },
     {
@@ -44,6 +44,15 @@ VENDORS: list[dict] = [
         "capabilities": ["chat", "vision", "embedding"],
         "models": {"chat": "glm-4-plus", "vision": "glm-4v-plus", "embedding": "embedding-3"},
         "note": "国产；含视觉与 embedding",
+    },
+    {
+        "id": "opencode-go",
+        "name": "OpenCode Go（本地代理）",
+        "provider": "openai-compatible",
+        "base_url": "http://127.0.0.1:8787/v1",
+        "capabilities": ["chat"],
+        "models": {"chat": "deepseek-v4-flash"},
+        "note": "OpenCode Go 订阅的本地 OpenAI 兼容代理（opencode-go-proxy，默认端口 8787）；通常无需 API Key",
     },
     {
         "id": "moonshot",

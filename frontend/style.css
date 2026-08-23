@@ -191,6 +191,15 @@ button.primary:disabled { background: #c9b8a8; cursor: not-allowed; }
 .ai-card.open .ai-card-body { display: block; }
 .cap-note { color: var(--warn); font-size: 12px; margin-bottom: 8px; }
 .cap-note:empty { display: none; }
+.test-result { font-size: 12px; margin-top: 8px; color: var(--ink-2); line-height: 1.7; }
+.test-result.ok { color: var(--ok); }
+.test-result.err { color: var(--danger); }
+.model-chips { display: inline; }
+.chip {
+  display: inline-block; border: 1px solid var(--line); background: #f5f1ea;
+  border-radius: 12px; padding: 2px 10px; margin: 2px 4px 2px 0; cursor: pointer; color: var(--ink);
+}
+.chip:hover { border-color: var(--brand); color: var(--brand); background: #faf3ee; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .form-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
 .form-row label { font-size: 12px; color: var(--ink-2); }

@@ -54,8 +54,8 @@ def _friendly_error(exc: Exception, base_url: str) -> str:
             return "AI 服务接口不存在（404）：请检查 Base URL 是否以 /v1 结尾。"
         if code == 503:
             return (
-                f"AI 服务不可用（503）：Ollama 服务未就绪或未安装，"
-                "请确认已启动 Ollama（winget install Ollama.Ollama），或改配云端 Provider。"
+                "AI 服务不可用（503）：本地 AI 服务未就绪或未启动（如 Ollama / OpenCode Go 代理），"
+                "请确认服务已运行，或检查 Base URL 与网络。"
             )
         if "model" in body.lower() and ("not found" in body.lower() or "not exist" in body.lower()):
             return f"模型不存在：请先执行 ollama pull <模型名> 拉取模型，或修改模型配置。"

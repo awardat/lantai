@@ -24,6 +24,7 @@ logger = logging.getLogger("lantai")
 async def lifespan(app: FastAPI):
     """启动初始化（L8 修复：以 lifespan 替代已废弃的 on_event）。"""
     config.ensure_dirs()
+    _setup_file_logging()
     st = Store()
     # 首次启动初始化：默认配置密码 / 会话密钥 / 版本号
     if not st.get_setting("admin_password_hash"):
@@ -37,6 +38,53 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("前端目录不存在：%s（仅 API 可用）", config.FRONTEND_DIR)
     yield
+
+
+def _setup_file_logging() -> None:
+    """每次启动创建新的日志文件（data/logs/lantai-<启动时间戳>.log），保留最近 20 个。
+
+    仅向 root logger 追加文件 handler：uvicorn 自带控制台 handler 不受影响，
+    access/error 日志经传播同时写入文件。
+    """
+    from datetime import datetime
+
+    root = logging.getLogger()
+    if any(isinstance(h, logging.FileHandler) for h in root.handlers):
+        return  # 已配置（如 reload 场景），避免重复
+    config.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    log_path = config.LOGS_DIR / f"lantai-{ts}.log"
+    fh = logging.FileHandler(log_path, encoding="utf-8")
+    fh.setLevel(logging.INFO)
+    fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s"))
+
+    # 单点挂载，避免同一条日志写入两次：
+    # - root：业务日志（lantai 等）传播至此 → 控制台(uvicorn default) + 文件
+    # - uvicorn：uvicorn.error 传播至此（propagate=True 默认）→ 控制台 + 文件
+    # - uvicorn.access：propagate=False，自身挂 fh → 控制台(自带 access) + 文件
+    root = logging.getLogger()
+    if not any(isinstance(h, logging.FileHandler) for h in root.handlers):
+        root.addHandler(fh)
+    uv = logging.getLogger("uvicorn")
+    uv.propagate = False
+    if not any(isinstance(h, logging.FileHandler) for h in uv.handlers):
+        uv.addHandler(fh)
+    for name in ("uvicorn.error", "uvicorn.access"):
+        lg = logging.getLogger(name)
+        lg.handlers = [h for h in lg.handlers if not isinstance(h, logging.FileHandler)]
+    lg = logging.getLogger("uvicorn.access")
+    lg.propagate = False
+    if not any(isinstance(h, logging.FileHandler) for h in lg.handlers):
+        lg.addHandler(fh)
+    root.setLevel(logging.INFO)
+    # 保留最近 20 个日志文件
+    logs = sorted(config.LOGS_DIR.glob("lantai-*.log"))
+    for old in logs[:-20]:
+        try:
+            old.unlink()
+        except OSError:
+            pass
+    logger.info("日志文件：%s", log_path)
 
 
 app = FastAPI(

@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 |------|------|
 | 产品名称 | 兰台（lantai）本地 RAG 知识库 |
-| 文档版本 | V1.2（对应应用 0.1.3） |
+| 文档版本 | V1.3（对应应用 0.1.4） |
 | 生成时间 | 2026-08-23 |
 | 数据来源 | 技术对接方案.md、PRD产品需求文档.md（§6）、数据库设计文档.md |
 | 适用范围 | 前端调用与外部程序集成（API token） |
@@ -264,7 +264,7 @@ curl -X POST http://127.0.0.1:8000/api/chat \
 ```json
 {
   "code": 0, "message": "ok",
-  "data": {"version": "0.1.3", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
+  "data": {"version": "0.1.4", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
 }
 ```
 

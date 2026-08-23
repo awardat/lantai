@@ -363,9 +363,10 @@ function renderAiCards() {
             <input data-f="temperature" type="number" min="0" max="2" step="0.1" value="${c.temperature ?? 0.2}">
           </div>
           <div class="form-row" style="justify-content:flex-end; flex-direction:row; align-items:flex-end;">
-            <button class="mini-btn" onclick="testAi('${key}')">测试连接</button>
+            <button class="mini-btn" onclick="testAi('${key}')">测试</button>
           </div>
         </div>
+        <div class="test-result" data-test-result="${key}"></div>
       </div>
     </div>`;
   }).join("");
@@ -409,16 +410,33 @@ function collectAiItem(key) {
 
 async function testAi(key) {
   const item = collectAiItem(key);
+  if (!item.base_url) { toast("请先填写 Base URL（或选择供应商）。", "error"); return; }
   if (!item.api_key && aiConfigCache && aiConfigCache[key] && aiConfigCache[key].api_key) {
     item.api_key = aiConfigCache[key].api_key; // 未填新 Key 时用已保存的（脱敏值，后端自动换存储值）
   }
+  const box = document.querySelector(`.ai-card[data-key="${key}"] [data-test-result]`);
+  if (box) { box.className = "test-result"; box.textContent = "正在测试连通性并获取模型清单…"; }
   try {
     const r = await api("/api/settings/ai/test", { method: "POST", body: { key, config: item } });
     const models = (r && r.models) || [];
-    toast(`连接成功：${models.length} 个模型（${models.slice(0, 5).join("、")}${models.length > 5 ? "…" : ""}）`, "success");
+    if (box) {
+      box.className = "test-result ok";
+      box.innerHTML = models.length
+        ? `✓ 连接成功，共 ${models.length} 个模型。点击模型名填入：<span class="model-chips">${models
+            .map((m) => `<span class="chip" onclick="pickModel('${key}', '${esc(m).replace(/'/g, "\\'")}')">${esc(m)}</span>`)
+            .join("")}</span>`
+        : "✓ 连接成功（未返回模型清单）。";
+    }
+    toast(`连接成功，共 ${models.length} 个模型。`, "success");
   } catch (e) {
+    if (box) { box.className = "test-result err"; box.textContent = "✗ " + e.message; }
     toast(e.message, "error");
   }
+}
+
+function pickModel(key, model) {
+  const input = document.querySelector(`.ai-card[data-key="${key}"] [data-f="model"]`);
+  if (input) input.value = model;
 }
 
 $("#btn-save-ai").addEventListener("click", async () => {

@@ -1,6 +1,6 @@
 # 兰台（lantai）· 本地 RAG 知识库
 
-> 版本 **0.1.3** ｜ 平台 **Windows x64**（MVP）｜ 单机部署 ｜ 无构建步骤，两步启动
+> 版本 **0.1.4** ｜ 平台 **Windows x64**（MVP）｜ 单机部署 ｜ 无构建步骤，两步启动
 
 ## 起名意境
 
@@ -20,7 +20,7 @@
 
 适合：个人知识管理、本地资料问答演示、企业内网离线知识库原型。
 
-## 功能一览（v0.1.3）
+## 功能一览（v0.1.4）
 
 | 模块 | 功能 |
 |------|------|
@@ -57,20 +57,20 @@ ollama pull llava:7b                            # 图片理解模型（可选；
 
 | 用途 | 可选服务 | 示例 |
 |------|----------|------|
-| 问答 | DeepSeek / OpenAI / 通义 / 智谱等 | `https://api.deepseek.com/v1`（模型 `deepseek-chat`） |
+| 问答 | DeepSeek / OpenAI / 通义 / 智谱等 | `https://api.deepseek.com/v1`（模型 `deepseek-v4-flash`） |
 | embedding | OpenAI / 通义等（**DeepSeek 官方无 embedding 接口**） | `https://api.openai.com/v1`（模型 `text-embedding-3-small`）或通义 `text-embedding-v3` |
 
 ## 模型推荐（优先国产）
 
 | 用途 | 文件类型 / 功能 | 本地（Ollama） | 云端推荐（国产优先） |
 |------|----------------|----------------|----------------------|
-| 文字理解 | 文字文档 / Office / 文字 PDF 处理、知识问答 | `qwen2.5:7b` | DeepSeek `deepseek-chat` ｜ 通义 `qwen-plus` ｜ 智谱 `glm-4-plus` |
+| 文字理解 | 文字文档 / Office / 文字 PDF 处理、知识问答 | `qwen2.5:7b` | DeepSeek `deepseek-v4-flash` ｜ 通义 `qwen-plus` ｜ 智谱 `glm-4-plus` |
 | 图片理解 | 图片（视觉描述入库） | `qwen2.5vl:7b`（或 `llava:7b`） | 通义 `qwen-vl-plus` ｜ 智谱 `glm-4v-plus` ｜ 硅基流动 `Qwen/Qwen2.5-VL-7B-Instruct` |
 | OCR | 图片 PDF（扫描件识别） | `qwen2.5vl:7b`（或 `llava:7b`） | 通义 `qwen-vl-plus` ｜ 智谱 `glm-4v-plus` |
 | 向量化 | embedding（全局，所有文件入库） | `bge-m3` | 通义 `text-embedding-v3` ｜ 硅基流动 `BAAI/bge-m3` |
 
 > **提示**：DeepSeek、Kimi 官方 API **无 embedding 接口**，向量化请选通义 / 硅基流动 / 本地 `bge-m3`。
-> 设置页「AI 配置」的**供应商下拉**已预置以上供应商与 Base URL（Ollama、DeepSeek、通义、智谱、Kimi、硅基流动、OpenAI），选择后自动填充推荐模型，可手动修改。
+> 设置页「AI 配置」的**供应商下拉**已预置以上供应商与 Base URL（Ollama、DeepSeek、OpenCode Go、通义、智谱、Kimi、硅基流动、OpenAI），选择后自动填充推荐模型，可手动修改；填入 API Key 后点击**「测试」**可验证连通性并获取模型清单（点击模型名自动填入）。
 
 ## 用法
 
@@ -91,7 +91,7 @@ python -m uvicorn app.main:app --port 8000
 
 ### 方式二：编译版运行（release）
 
-解压 `release/lantai-0.1.3-windows-x64.zip`，运行目录内 `lantai.exe`，浏览器打开 http://127.0.0.1:8000。
+解压 `release/lantai-0.1.4-windows-x64.zip`，运行目录内 `lantai.exe`，浏览器打开 http://127.0.0.1:8000。
 
 > 数据（`rag.db`、上传源文件）保存在运行目录的 `data/` 下，整体拷贝目录即可迁移。
 
@@ -122,6 +122,7 @@ python -m uvicorn app.main:app --port 8000
 ## 常见问题
 
 - **问答报"无法连接 Ollama"**：确认 Ollama 已启动（托盘图标存在），或改配云端 API。
+- **日志位置**：每次启动生成新的日志文件 `backend/data/logs/lantai-<时间戳>.log`（编译版在运行目录 `data/logs/`），保留最近 20 个；排查问题时可查看。
 - **报"模型不存在/未拉取"**：执行 `ollama list` 检查，缺少则 `ollama pull <模型名>`。
 - **云端 embedding 报 404**：DeepSeek 官方 API 无 embeddings 接口，请将 embedding 换为 OpenAI/通义等或本地 bge-m3。
 - **忘记配置密码**：删除 `data/rag.db` 中 settings 表的密码记录或直接删除数据目录重新初始化（演示数据可重建）。

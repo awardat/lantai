@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-APP_VERSION = "0.1.3"
+APP_VERSION = "0.1.4"
 APP_NAME = "lantai"
 
 
@@ -31,6 +31,7 @@ BASE_DIR = _base_dir()
 DATA_DIR = BASE_DIR / "data"
 UPLOAD_DIR = DATA_DIR / "uploads"
 DB_PATH = DATA_DIR / "rag.db"
+LOGS_DIR = DATA_DIR / "logs"
 FRONTEND_DIR = _frontend_dir()
 
 MAX_UPLOAD_MB = 20
