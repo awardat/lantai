@@ -96,19 +96,22 @@ def preview_document(doc_id: int):
         content = filetype.parse_docx(file_path)
         return ok({"type": "text", "doc": _doc_out(doc).model_dump(), "content": content, "format": "plain"})
     if category in ("pdf_text", "pdf_image"):
+        # 0.1.9：PDF 预览优先用浏览器原生查看器（iframe 加载源文件），文本提取作为降级
         pages = filetype.pdf_text_layers(file_path)
         page_texts = [t for t, _ok in pages]  # 几何排序后的页面文本
-        if category == "pdf_image":
-            text_parts = [p.strip() for p in page_texts if p and p.strip()]
-            if text_parts:
-                rendered = "\n\n".join(text_parts)
-                note = "（本 PDF 判定为扫描件，以下为可提取的少量文本；图片页内容请经 OCR 解析后查看）"
-            else:
-                rendered = ""
-                note = "（本 PDF 为扫描件，无文本层；可在知识库中检索其 OCR 解析结果）"
-            return ok({"type": "text", "doc": _doc_out(doc).model_dump(), "content": rendered, "format": "plain", "note": note})
         rendered = "\n\n".join(f"【第 {i + 1} 页】\n{p.strip()}" for i, p in enumerate(page_texts) if p and p.strip())
-        return ok({"type": "text", "doc": _doc_out(doc).model_dump(), "content": rendered, "format": "plain"})
+        note = ""
+        if category == "pdf_image" and not rendered:
+            note = "（本 PDF 为扫描件，无文本层；下方为浏览器原生渲染的原始页面，OCR 结果可在知识库中检索）"
+        return ok(
+            {
+                "type": "pdf",
+                "doc": _doc_out(doc).model_dump(),
+                "content": rendered,
+                "raw_url": f"/api/docs/{doc_id}/preview/raw",
+                "note": note,
+            }
+        )
 
     raise HTTPException(status_code=415, detail="该类型暂不支持预览。")
 

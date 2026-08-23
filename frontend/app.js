@@ -364,7 +364,12 @@ async function openPreview(docId) {
   try {
     const r = await api(`/api/docs/${docId}/preview`);
     $("#preview-title").textContent = r.doc.name;
-    if (r.type === "image") {
+    if (r.type === "pdf") {
+      // 0.1.9：PDF 用浏览器原生查看器渲染源文件（支持缩放/翻页/搜索）
+      let note = "";
+      if (r.note) note = `<div class="preview-note">${esc(r.note)}</div>`;
+      $("#preview-body").innerHTML = `${note}<iframe class="pdf-frame" src="${r.raw_url}" title="${esc(r.doc.name)}"></iframe>`;
+    } else if (r.type === "image") {
       $("#preview-body").innerHTML = `<img src="${r.raw_url}" alt="${esc(r.doc.name)}">`;
     } else {
       let note = "";
