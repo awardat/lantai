@@ -9,60 +9,62 @@
 </head>
 <body>
 
-<header class="topbar">
-  <div class="brand">
-    <span class="logo">兰</span>
-    <div class="brand-text">
-      <h1>兰台</h1>
-      <p>本地知识库 · 检索增强问答</p>
-    </div>
-  </div>
-  <nav class="tabs">
-    <button class="tab active" data-view="chat">问答</button>
-    <button class="tab" data-view="docs">文档管理</button>
-  </nav>
-  <div class="actions">
-    <button id="btn-settings" class="icon-btn" title="设置">⚙</button>
-  </div>
-</header>
-
-<main>
-  <!-- 业务功能 · 问答 -->
-  <section id="view-chat" class="view active">
-    <div class="conv-bar">
-      <button id="btn-new-conv" class="mini-btn">＋ 新建对话</button>
-      <select id="conv-select" class="conv-select" title="切换对话（历史消息作为上下文）"></select>
-      <button id="btn-rename-conv" class="mini-btn">重命名</button>
-      <button id="btn-del-conv" class="mini-btn danger">删除对话</button>
-    </div>
-    <div id="conv-messages" class="conv-messages"></div>
-    <div class="chat-box">
-      <textarea id="chat-input" rows="3" placeholder="请输入问题，例如：什么是兰台？知识库中有哪些文档？"></textarea>
-      <div class="chat-actions">
-        <span id="chat-status" class="status-line"></span>
-        <button id="btn-ask" class="primary">提问</button>
+<div class="app">
+  <!-- 左栏：logo + 会话历史 + 底部导航 -->
+  <aside class="sidebar">
+    <div class="side-logo">
+      <span class="logo">兰</span>
+      <div class="side-logo-text">
+        <h1>兰台</h1>
+        <p>本地知识库 · RAG</p>
       </div>
     </div>
-    <div id="chat-answer" class="answer-box hidden"></div>
-    <div id="chat-sources" class="sources"></div>
-  </section>
 
-  <!-- 业务功能 · 文档管理 -->
-  <section id="view-docs" class="view">
-    <div class="docs-toolbar">
-      <button id="btn-upload" class="primary">上传文档</button>
-      <input type="file" id="file-input" multiple hidden
-             accept=".txt,.md,.pdf,.docx,.png,.jpg,.jpeg,.webp,.bmp,.gif">
-      <span class="hint">支持 txt / md / pdf / docx / 图片，单个 ≤ 20MB；解析完成后即可检索问答</span>
+    <div class="side-convs">
+      <div class="side-label">
+        <span>会话历史</span>
+        <button id="btn-new-conv" class="icon-mini" title="新建对话">＋</button>
+      </div>
+      <div id="conv-list" class="conv-list"></div>
     </div>
-    <table class="doc-table">
-      <thead>
-        <tr><th>名称</th><th>类型</th><th>大小</th><th>状态</th><th>切片数</th><th>上传时间</th><th>操作</th></tr>
-      </thead>
-      <tbody id="doc-tbody"></tbody>
-    </table>
-  </section>
-</main>
+
+    <nav class="side-nav">
+      <button class="side-nav-btn active" data-view="chat" title="问答">💬 问答</button>
+      <button class="side-nav-btn" data-view="docs" title="文件管理">📁 文件管理</button>
+      <button class="side-nav-btn" id="btn-settings" title="设置">⚙ 设置</button>
+    </nav>
+  </aside>
+
+  <!-- 右栏：内容区 -->
+  <main class="main">
+    <!-- 问答视图：消息流 + 底部输入框 -->
+    <section id="view-chat" class="view active">
+      <div id="chat-messages" class="chat-messages">
+        <div class="chat-empty">开始提问吧 —— 例如：什么是兰台？</div>
+      </div>
+      <div class="chat-composer">
+        <textarea id="chat-input" rows="2" placeholder="输入问题，Enter 发送，Shift+Enter 换行"></textarea>
+        <button id="btn-ask" class="primary">提问</button>
+      </div>
+    </section>
+
+    <!-- 文档管理视图 -->
+    <section id="view-docs" class="view">
+      <div class="docs-toolbar">
+        <button id="btn-upload" class="primary">上传文档</button>
+        <input type="file" id="file-input" multiple hidden
+               accept=".txt,.md,.pdf,.docx,.png,.jpg,.jpeg,.webp,.bmp,.gif">
+        <span class="hint">支持 txt / md / pdf / docx / 图片，单个 ≤ 20MB；解析完成后即可检索问答</span>
+      </div>
+      <table class="doc-table">
+        <thead>
+          <tr><th>名称</th><th>类型</th><th>大小</th><th>状态</th><th>切片数</th><th>上传时间</th><th>操作</th></tr>
+        </thead>
+        <tbody id="doc-tbody"></tbody>
+      </table>
+    </section>
+  </main>
+</div>
 
 <!-- 配置功能（设置图标进入，密码门禁） -->
 <div id="settings-overlay" class="overlay hidden">

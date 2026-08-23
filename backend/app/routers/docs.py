@@ -97,8 +97,9 @@ def preview_document(doc_id: int):
         return ok({"type": "text", "doc": _doc_out(doc).model_dump(), "content": content, "format": "plain"})
     if category in ("pdf_text", "pdf_image"):
         pages = filetype.pdf_text_layers(file_path)
+        page_texts = [t for t, _ok in pages]  # 几何排序后的页面文本
         if category == "pdf_image":
-            text_parts = [p.strip() for p in pages if p and p.strip()]
+            text_parts = [p.strip() for p in page_texts if p and p.strip()]
             if text_parts:
                 rendered = "\n\n".join(text_parts)
                 note = "（本 PDF 判定为扫描件，以下为可提取的少量文本；图片页内容请经 OCR 解析后查看）"
@@ -106,7 +107,7 @@ def preview_document(doc_id: int):
                 rendered = ""
                 note = "（本 PDF 为扫描件，无文本层；可在知识库中检索其 OCR 解析结果）"
             return ok({"type": "text", "doc": _doc_out(doc).model_dump(), "content": rendered, "format": "plain", "note": note})
-        rendered = "\n\n".join(f"【第 {i + 1} 页】\n{p.strip()}" for i, p in enumerate(pages) if p and p.strip())
+        rendered = "\n\n".join(f"【第 {i + 1} 页】\n{p.strip()}" for i, p in enumerate(page_texts) if p and p.strip())
         return ok({"type": "text", "doc": _doc_out(doc).model_dump(), "content": rendered, "format": "plain"})
 
     raise HTTPException(status_code=415, detail="该类型暂不支持预览。")

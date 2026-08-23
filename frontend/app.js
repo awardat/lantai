@@ -83,10 +83,11 @@ async function loadVendors() {
   }
 }
 
-/* ---------------- Tab 切换 ---------------- */
-document.querySelectorAll(".tab").forEach((btn) => {
+/* ---------------- 左栏导航（问答 / 文件管理 / 设置） ---------------- */
+document.querySelectorAll(".side-nav-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
+    if (btn.id === "btn-settings") { openSettings(); return; }
+    document.querySelectorAll(".side-nav-btn").forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
     document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
     $("#view-" + btn.dataset.view).classList.add("active");
@@ -173,116 +174,140 @@ async function deleteDoc(id, name) {
   loadDocs();
 }
 
-/* ---------------- 对话历史（0.1.5） ---------------- */
-let currentConvId = null;   // null = 未关联会话（提问时自动创建）
+/* ---------------- 对话历史（0.1.5 / 0.1.8 左栏会话列表） ---------------- */
+let currentConvId = null;    // null = 未关联会话（提问时自动创建）
+let convJustCreated = false; // 本次提问是否新建会话（用于首轮自动命名标题）
 
-async function loadConversations() {
-  try {
-    const convs = await api("/api/conversations");
-    const sel = $("#conv-select");
-    sel.innerHTML = `<option value="">（不关联会话）</option>` +
-      convs.map((c) => `<option value="${c.id}" ${currentConvId === c.id ? "selected" : ""}>${esc(c.title || ("对话 #" + c.id))}</option>`).join("");
-    if (currentConvId !== null && !convs.some((c) => c.id === currentConvId)) {
-      currentConvId = null;
-      $("#conv-messages").innerHTML = "";
+function clearMessages() {
+  const box = $("#chat-messages");
+  box.innerHTML = '<div class="chat-empty">开始提问吧 —— 例如：什么是兰台？</div>';
+}
+
+function appendMsg(role, content, isStreamAnswer) {
+  const box = $("#chat-messages");
+  const empty = box.querySelector(".chat-empty");
+  if (empty) empty.remove();
+  const el = document.createElement("div");
+  el.className = "msg " + (role === "user" ? "user" : "assistant");
+  el.innerHTML = `<div class="msg-label">${role === "user" ? "我" : "兰台"}</div><div class="msg-body"></div>`;
+  const body = el.querySelector(".msg-body");
+  if (isStreamAnswer) {
+    body.innerHTML = `<div class="answer-text"></div><div class="src-line"></div>`;
+    body.firstElementChild.textContent = content;
+  } else {
+    body.textContent = content;
+  }
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+  return el;
+}
+
+async function renderConvList() {
+  const convs = await api("/api/conversations");
+  const list = $("#conv-list");
+  if (!convs.length) {
+    list.innerHTML = '<div class="conv-empty">暂无会话，点击 ＋ 新建</div>';
+    return;
+  }
+  list.innerHTML = convs.map((c) => {
+    const title = c.title || ("对话 #" + c.id);
+    return `<div class="conv-item ${currentConvId === c.id ? "active" : ""}" data-id="${c.id}" title="${esc(title)}">
+      <span class="conv-title">${esc(title)}</span>
+      <span class="conv-actions">
+        <button class="icon-mini" data-act="rename" title="重命名">✎</button>
+        <button class="icon-mini" data-act="del" title="删除">🗑</button>
+      </span>
+    </div>`;
+  }).join("");
+  if (currentConvId !== null && !convs.some((c) => c.id === currentConvId)) {
+    currentConvId = null;
+    clearMessages();
+  }
+}
+
+$("#conv-list").addEventListener("click", async (e) => {
+  const item = e.target.closest(".conv-item");
+  if (!item) return;
+  const id = parseInt(item.dataset.id, 10);
+  const actBtn = e.target.closest("[data-act]");
+  if (actBtn) {
+    e.stopPropagation();
+    if (actBtn.dataset.act === "rename") {
+      const old = item.querySelector(".conv-title").textContent;
+      const title = prompt("输入新的对话名称：", old);
+      if (!title || !title.trim()) return;
+      try {
+        await api(`/api/conversations/${id}`, { method: "PUT", body: { title: title.trim() } });
+        toast("对话已重命名。", "success");
+        await renderConvList();
+      } catch (err) { toast(err.message, "error"); }
+    } else if (actBtn.dataset.act === "del") {
+      if (!confirm("确定删除该对话及其全部消息吗？")) return;
+      try {
+        await api(`/api/conversations/${id}`, { method: "DELETE" });
+        if (currentConvId === id) { currentConvId = null; clearMessages(); }
+        toast("对话已删除。", "success");
+        await renderConvList();
+      } catch (err) { toast(err.message, "error"); }
     }
-  } catch (e) {
-    if (e.status !== 401) toast(e.message, "error");
+    return;
   }
-}
-
-async function loadMessages(convId) {
-  const box = $("#conv-messages");
-  if (!convId) { box.innerHTML = ""; return; }
+  // 切换会话：加载历史消息
+  currentConvId = id;
+  clearMessages();
+  await renderConvList();
   try {
-    const msgs = await api(`/api/conversations/${convId}/messages`);
-    box.innerHTML = msgs.map((m) =>
-      `<div class="msg ${m.role === "user" ? "user" : "assistant"}"><div class="msg-label">${m.role === "user" ? "我" : "兰台"}</div><div class="msg-body">${esc(m.content)}</div></div>`
-    ).join("") || '<div class="conv-empty">暂无消息，开始提问吧</div>';
-    box.scrollTop = box.scrollHeight;
-  } catch (e) {
-    toast(e.message, "error");
-  }
-}
+    const msgs = await api(`/api/conversations/${id}/messages`);
+    for (const m of msgs) appendMsg(m.role, m.content, false);
+  } catch (err) { toast(err.message, "error"); }
+  $("#chat-input").focus();
+});
 
 $("#btn-new-conv").addEventListener("click", async () => {
   try {
     const r = await api("/api/conversations", { method: "POST", body: { title: "新对话" } });
     currentConvId = r.id;
-    $("#conv-messages").innerHTML = "";
-    $("#chat-answer").classList.add("hidden");
-    $("#chat-sources").innerHTML = "";
-    await loadConversations();
+    clearMessages();
+    await renderConvList();
     $("#chat-input").focus();
-  } catch (e) {
-    toast(e.message, "error");
-  }
+  } catch (e) { toast(e.message, "error"); }
 });
 
-$("#conv-select").addEventListener("change", async (e) => {
-  const v = e.target.value;
-  currentConvId = v ? parseInt(v, 10) : null;
-  $("#chat-answer").classList.add("hidden");
-  $("#chat-sources").innerHTML = "";
-  await loadMessages(currentConvId);
-});
-
-$("#btn-del-conv").addEventListener("click", async () => {
-  if (!currentConvId) { toast("请先选择要删除的对话。", "error"); return; }
-  if (!confirm("确定删除该对话及其全部消息吗？")) return;
-  try {
-    await api(`/api/conversations/${currentConvId}`, { method: "DELETE" });
-    currentConvId = null;
-    $("#conv-messages").innerHTML = "";
-    await loadConversations();
-    toast("对话已删除。", "success");
-  } catch (e) {
-    toast(e.message, "error");
-  }
-});
-
-$("#btn-rename-conv").addEventListener("click", async () => {
-  if (!currentConvId) { toast("请先选择要重命名的对话。", "error"); return; }
-  const sel = $("#conv-select");
-  const oldTitle = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : "新对话";
-  const title = prompt("输入新的对话名称：", oldTitle);
-  if (!title || !title.trim()) return;
-  try {
-    await api(`/api/conversations/${currentConvId}`, { method: "PUT", body: { title: title.trim() } });
-    await loadConversations();
-    toast("对话已重命名。", "success");
-  } catch (e) {
-    toast(e.message, "error");
-  }
-});
-
-async function ensureConversation(question) {
+async function ensureConversation() {
   if (currentConvId !== null) return;
   const r = await api("/api/conversations", { method: "POST", body: { title: "新对话" } });
   currentConvId = r.id;
-  await loadConversations();
+  convJustCreated = true;
+  await renderConvList();
 }
 
-/* ---------------- 问答（SSE 流式） ---------------- */
+/* ---------------- 问答（SSE 流式，0.1.8：消息流 + 来源小字内嵌） ---------------- */
 $("#btn-ask").addEventListener("click", ask);
 $("#chat-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(); }
 });
+
+function renderSourcesInline(el, sources) {
+  if (!sources.length) { el.textContent = ""; return; }
+  el.innerHTML = sources.map((s) =>
+    `<div class="src-item">来源：<b>${esc(s.doc_name)}</b> · 相似度 ${s.score} · <a href="javascript:void(0)" onclick="openPreview(${s.doc_id})">预览</a></div>`
+  ).join("");
+}
 
 async function ask() {
   const q = $("#chat-input").value.trim();
   if (!q) { toast("请输入问题。", "error"); return; }
   const btn = $("#btn-ask");
   btn.disabled = true;
-  $("#chat-status").textContent = "正在检索知识库并生成答案…";
-  $("#chat-answer").classList.remove("hidden");
-  $("#chat-answer").innerHTML = `<div class="answer-label">答案</div><div class="answer-text"></div>`;
-  const answerEl = $("#chat-answer").lastElementChild;
-  answerEl.textContent = "";
-  $("#chat-sources").innerHTML = "";
+
+  appendMsg("user", q, false);          // 用户气泡
+  $("#chat-input").value = "";           // 提问后清空输入框
+  const assistantEl = appendMsg("assistant", "", true);
+  const answerEl = assistantEl.querySelector(".answer-text");
+  const srcLineEl = assistantEl.querySelector(".src-line");
 
   try {
-    await ensureConversation(q); // 未关联会话时自动创建
+    await ensureConversation(); // 未关联会话时自动创建
     const resp = await fetch("/api/chat/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -296,7 +321,7 @@ async function ask() {
     const reader = resp.body.getReader();
     const decoder = new TextDecoder("utf-8");
     let buf = "";
-    let sourceCount = 0;
+    let answer = "";
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -309,40 +334,27 @@ async function ask() {
         let ev;
         try { ev = JSON.parse(t.slice(5).trim()); } catch (e) { continue; }
         if (ev.type === "sources") {
-          sourceCount = (ev.sources || []).length;
-          renderSources(ev.sources || []);
+          renderSourcesInline(srcLineEl, ev.sources || []);
         } else if (ev.type === "delta") {
-          answerEl.textContent += ev.content;
+          answer += ev.content;
+          answerEl.textContent = answer;
         } else if (ev.type === "error") {
           toast(ev.message, "error");
-        } else if (ev.type === "done") {
-          // done
         }
       }
     }
-    $("#chat-status").textContent = sourceCount ? `检索到 ${sourceCount} 个相关切片` : "未检索到相关内容";
-    if (currentConvId) await loadMessages(currentConvId); // 刷新历史消息区
+    // 首轮问答自动生成会话标题（用第一轮问题，超长截断）
+    if (convJustCreated && answer.trim()) {
+      const title = q.length > 20 ? q.slice(0, 20) + "…" : q;
+      await api(`/api/conversations/${currentConvId}`, { method: "PUT", body: { title } });
+      convJustCreated = false;
+      await renderConvList();
+    }
   } catch (e) {
-    $("#chat-status").textContent = "";
     toast(e.message, "error");
   } finally {
     btn.disabled = false;
   }
-}
-
-function renderSources(sources) {
-  const box = $("#chat-sources");
-  if (!sources.length) return;
-  box.innerHTML = `<div class="sources-title">引用来源（按相似度排序）</div>` +
-    sources.map((s) => `<div class="source-card">
-      <div class="source-head">
-        <span class="source-name">${esc(s.doc_name)}</span>
-        <span class="badge score">相似度 ${s.score}</span>
-        <span class="badge cat">${esc(CATEGORY_LABELS[s.category] || s.category)}</span>
-        <button class="mini-btn" onclick="openPreview(${s.doc_id})">预览源文件</button>
-      </div>
-      <div class="source-text">${esc(s.chunk_text)}</div>
-    </div>`).join("");
 }
 
 /* ---------------- 预览 ---------------- */
@@ -372,7 +384,6 @@ $("#preview-overlay").addEventListener("click", (e) => {
 /* ---------------- 设置（密码门禁） ---------------- */
 const settingsOverlay = $("#settings-overlay");
 
-$("#btn-settings").addEventListener("click", openSettings);
 $("#btn-close-settings").addEventListener("click", closeSettings);
 settingsOverlay.addEventListener("click", (e) => {
   if (e.target === settingsOverlay) closeSettings();
@@ -702,4 +713,4 @@ async function loadAbout() {
 
 /* ---------------- 初始化 ---------------- */
 loadDocs();
-loadConversations();
+renderConvList();

@@ -74,18 +74,82 @@ def parse_docx(path: Path) -> str:
     return "\n".join(parts)
 
 
-def pdf_text_layers(path: Path) -> list[str]:
-    """pypdf 逐页提取文本层。返回每页文本列表。"""
-    from pypdf import PdfReader
+def pdf_text_layers(path: Path) -> list[tuple[str, bool]]:
+    """逐页提取文本（R117①：pdfminer layout 按位置取行 → 几何排序还原阅读顺序）。
 
-    reader = PdfReader(str(path))
-    pages = []
-    for page in reader.pages:
-        try:
-            pages.append(page.extract_text() or "")
-        except Exception:
-            pages.append("")
-    return pages
+    返回 [(页面文本, 是否文本页), ...]：
+    - 页面文本：按阅读顺序（栏内 y 降序、x 升序）拼接的行；
+    - 是否文本页：该页有效文本 ≥ PDF_TEXT_MIN_CHARS 字符（页级判定，R117②）。
+    处理：跨页重复行（页眉/页脚模式）剔除、页顶/页底纯数字页码碎片剔除、基础双栏检测。
+    """
+    from collections import Counter
+
+    from pdfminer.high_level import extract_pages
+    from pdfminer.layout import LTTextLineHorizontal, LTTextContainer
+
+    page_lines: list[list[tuple[str, float, float, float, float]]] = []
+    all_lines: list[str] = []
+    heights: list[float] = []
+    for page_layout in extract_pages(str(path)):
+        lines: list[tuple[str, float, float, float, float]] = []
+        for el in page_layout:
+            if not isinstance(el, LTTextContainer):
+                continue
+            for ln in el:
+                if isinstance(ln, LTTextLineHorizontal):
+                    t = ln.get_text().strip()
+                    if t:
+                        lines.append((t, ln.x0, ln.x1, ln.y0, ln.y1))
+        page_lines.append(lines)
+        all_lines.extend(t for t, *_ in lines)
+        heights.append(float(page_layout.height))
+    # 跨页重复行（≥3 页出现 → 页眉/页脚等装饰性内容）
+    repeated = {t for t, c in Counter(all_lines).items() if c >= 3}
+
+    pages_out: list[tuple[str, bool]] = []
+    for lines, height in zip(page_lines, heights):
+        ordered = _layout_order(lines, height, repeated)
+        text = "\n".join(ordered).strip()
+        pages_out.append((text, len(text) >= config.PDF_TEXT_MIN_CHARS))
+    return pages_out
+
+
+def _layout_order(
+    lines: list[tuple[str, float, float, float, float]],
+    height: float,
+    repeated: set[str],
+) -> list[str]:
+    """按阅读顺序排列文本行：过滤装饰 → 双栏检测 → 栏内几何排序。"""
+    kept: list[tuple[str, float, float, float, float]] = []
+    for t, x0, x1, y0, y1 in lines:
+        s = t.strip()
+        if not s:
+            continue
+        if s in repeated:  # 跨页重复（页眉/页脚）
+            continue
+        # 页码碎片：纯数字且位于页顶（上 12%）/页底（下 15%）区域
+        if re.fullmatch(r"[\d\s]{1,6}", s) and (y1 > height * 0.88 or y0 < height * 0.15):
+            continue
+        kept.append((t, x0, x1, y0, y1))
+    if not kept:
+        return []
+
+    # 基础双栏检测：行中点 x 的最大空隙
+    mids = sorted((x0 + x1) / 2 for _, x0, x1, _, _ in kept)
+    page_w = max(x1 for _, _, x1, _, _ in kept) - min(x0 for _, x0, _, _, _ in kept)
+    gap, split = 0.0, None
+    for a, b in zip(mids, mids[1:]):
+        if b - a > gap:
+            gap, split = b - a, (a + b) / 2
+    two_column = gap > page_w * 0.12 and len(kept) >= 16
+
+    def by_col(col: str) -> list[str]:
+        rows = [k for k in kept if (k[1] + k[2]) / 2 < split] if col == "left" else [k for k in kept if (k[1] + k[2]) / 2 >= split]
+        return [t for t, *_ in sorted(rows, key=lambda k: (-k[4], k[1]))]  # y 降序、x 升序
+
+    if two_column:
+        return by_col("left") + by_col("right")
+    return [t for t, *_ in sorted(kept, key=lambda k: (-k[4], k[1]))]
 
 
 def pdf_extract_page_images(path: Path) -> list[tuple[int, bytes, str]]:

@@ -28,10 +28,22 @@ def _extract_text(doc: dict, file_path: Path, st: Store) -> tuple[str, str]:
     if category == "office":
         return filetype.parse_docx(file_path), category
     if category == "pdf_text":
+        # R117② 页级判定：文本页走几何排序提取，图片页（无文本层）走 OCR
         pages = filetype.pdf_text_layers(file_path)
-        text = "\n\n".join(p.strip() for p in pages if p and p.strip())
+        text_parts: list[str] = []
+        ocr_pages: list[int] = []
+        for i, (page_text, is_text_page) in enumerate(pages, 1):
+            if is_text_page:
+                text_parts.append(page_text)
+            else:
+                ocr_pages.append(i)
+        if ocr_pages:
+            text_parts.append(_ocr_pdf_pages(file_path, st, ocr_pages))
+        # R117③：文字 PDF 页内图片（图表）→ 视觉描述 + 页码绑定（跳过已 OCR 的图片页）
+        text_parts.append(_describe_inline_images(file_path, st, skip_pages=set(ocr_pages)))
+        text = "\n\n".join(p for p in text_parts if p and p.strip())
         if len(text.strip()) < config.PDF_TEXT_MIN_CHARS:
-            # 文本层过少 → 判定为扫描件，走 OCR
+            # 全部页面均无有效文本 → 判定为扫描件，整文档走 OCR
             return _ocr_pdf(file_path, st), "pdf_image"
         return text, category
     if category == "image":
@@ -42,6 +54,50 @@ def _extract_text(doc: dict, file_path: Path, st: Store) -> tuple[str, str]:
     if category == "pdf_image":
         return _ocr_pdf(file_path, st), category
     raise RuntimeError(f"不支持的文件类型：{doc.get('ext', '')}")
+
+
+def _describe_inline_images(file_path: Path, st: Store, skip_pages: set[int] | None = None) -> str:
+    """文字 PDF 页内图片（图表/照片）→ 视觉模型描述，前缀标注页码（图题/引用绑定基础）。
+
+    视觉模型不可用或图片缺失时跳过，不阻塞解析。
+    """
+    skip_pages = skip_pages or set()
+    try:
+        images = filetype.pdf_extract_page_images(file_path)
+    except Exception:
+        return ""
+    images = [(p, d, m) for p, d, m in images if p not in skip_pages]
+    if not images:
+        return ""
+    cfg = st.get_ai_config()["image"]
+    parts = []
+    for page_no, data, mime in images:
+        try:
+            desc = _vision_describe(cfg, data, mime, "请描述这张图片的内容，包括其中的文字。")
+            parts.append(f"【图片（第 {page_no} 页）】{desc}")
+        except Exception:
+            continue  # 视觉模型不可用：跳过该图
+    return "\n".join(parts)
+
+
+def _ocr_pdf_pages(file_path: Path, st: Store, page_nos: list[int]) -> str:
+    """对指定页码的页面图片执行 OCR（pdf_image 通道配置）。"""
+    wanted = set(page_nos)
+    try:
+        images = filetype.pdf_extract_page_images(file_path)
+    except Exception:
+        return ""
+    cfg = st.get_ai_config()["pdf_image"]
+    parts = []
+    for page_no, data, mime in images:
+        if page_no not in wanted:
+            continue
+        try:
+            text = _vision_describe(cfg, data, mime, "请识别图片中的全部文字，保持原文顺序。")
+            parts.append(f"【第 {page_no} 页】\n{text}")
+        except Exception:
+            continue
+    return "\n\n".join(parts)
 
 
 def _ocr_pdf(file_path: Path, st: Store) -> str:

@@ -69,6 +69,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - ✅ 已执行：0.1.5（用户确认档位 3 开工后实施）：**SSE 流式输出**（/api/chat/stream：sources → delta → done，前端打字机渲染）、**对话历史**（conversations/messages 表 schema v2、会话 CRUD、携带最近 6 条历史上下文并入库、前端会话管理）、scripts/mock_ai_server.py 开发自测 Mock AI；全链路自测通过（Mock AI：上传→解析→流式问答→多轮历史），`release/lantai-0.1.5-windows-x64/` 验证可运行。
 - ✅ 已执行：0.1.6（用户确认整改方案后实施，N-M2 模型名经用户决策保留）：评审整改（代码与文档评审报告-v0.1.5.md）——N-M1 流式无效会话预校验 404、N-M3 文档描述修正、N-L1~N-L8 文档与代码同步、N-L9 会话重命名、N-L10 启用外键；N-L11/N-L12 延后；`release/lantai-0.1.6-windows-x64/` 验证可运行。
 - ✅ 已执行：0.1.7（用户确认后实施）：配置功能**自动保存**（AI 配置输入框焦点离开即保存、串行化提交、轻提示"已自动保存"、保留手动按钮）；OpenCode Go 默认 URL 改为官方端点 `https://opencode.ai/zen/go/v1`；`release/lantai-0.1.7-windows-x64/` 验证可运行。
+- ✅ 已执行：0.1.8（用户确认后实施）：**前端排版重构**（左右两栏：左栏固定宽=logo+会话历史+底部导航，右栏=消息流+底部输入框、提问后清空；会话标题首轮自动生成；改名/删除小图标；标题截断悬停；来源小字内嵌）；**R117 ①②③**（PDF 几何排序提取 pdfminer.six+页眉页脚过滤+页码碎片+基础双栏检测、页级文本密度判定混合 PDF 自动 OCR、文字 PDF 页内图片抽取+视觉描述+页码绑定；④跨页表格列下一轮）；`release/lantai-0.1.8-windows-x64/` 验证可运行。
 - ⏳ **等待用户确认**后再进入后续迭代（RBAC、多平台、Docker、档位 3 等均只入需求与文档）。
 
 ## 会话注意事项
