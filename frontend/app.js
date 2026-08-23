@@ -241,6 +241,21 @@ $("#btn-del-conv").addEventListener("click", async () => {
   }
 });
 
+$("#btn-rename-conv").addEventListener("click", async () => {
+  if (!currentConvId) { toast("请先选择要重命名的对话。", "error"); return; }
+  const sel = $("#conv-select");
+  const oldTitle = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : "新对话";
+  const title = prompt("输入新的对话名称：", oldTitle);
+  if (!title || !title.trim()) return;
+  try {
+    await api(`/api/conversations/${currentConvId}`, { method: "PUT", body: { title: title.trim() } });
+    await loadConversations();
+    toast("对话已重命名。", "success");
+  } catch (e) {
+    toast(e.message, "error");
+  }
+});
+
 async function ensureConversation(question) {
   if (currentConvId !== null) return;
   const r = await api("/api/conversations", { method: "POST", body: { title: "新对话" } });

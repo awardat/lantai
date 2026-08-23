@@ -1,5 +1,5 @@
 """安全模块：配置密码（PBKDF2）、会话（内存 + HTTP-only Cookie）、API token、
-AI 配置中 API Key 的存储加密（演示级：XOR+HMAC 封装，防明文落盘）。
+AI 配置中 API Key 的存储加密（演示级：XOR + base64 封装，防明文落盘，无 HMAC 完整性校验）。
 
 RBAC（R101）落地时，本模块升级为用户/角色/权限点鉴权。
 """

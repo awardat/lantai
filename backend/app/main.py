@@ -48,9 +48,6 @@ def _setup_file_logging() -> None:
     """
     from datetime import datetime
 
-    root = logging.getLogger()
-    if any(isinstance(h, logging.FileHandler) for h in root.handlers):
-        return  # 已配置（如 reload 场景），避免重复
     config.LOGS_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     log_path = config.LOGS_DIR / f"lantai-{ts}.log"
@@ -58,7 +55,7 @@ def _setup_file_logging() -> None:
     fh.setLevel(logging.INFO)
     fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s"))
 
-    # 单点挂载，避免同一条日志写入两次：
+    # 单点挂载（N-L7：挂载逻辑幂等，无冗余提前返回）：
     # - root：业务日志（lantai 等）传播至此 → 控制台(uvicorn default) + 文件
     # - uvicorn：uvicorn.error 传播至此（propagate=True 默认）→ 控制台 + 文件
     # - uvicorn.access：propagate=False，自身挂 fh → 控制台(自带 access) + 文件

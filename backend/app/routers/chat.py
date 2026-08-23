@@ -37,8 +37,9 @@ def _history_messages(conv_id: Optional[int], max_count: int = 6) -> list[dict]:
     return [{"role": m["role"], "content": m["content"]} for m in store.recent_messages(conv_id, max_count)]
 
 
-def _build_messages(question: str, context: str, conv_id: Optional[int]) -> list[dict]:
-    cfg = store.get_ai_config()["chat"]
+def _build_messages(question: str, context: str, conv_id: Optional[int], chat_cfg: Optional[dict] = None) -> list[dict]:
+    """组装消息：系统提示 + 历史（最近 6 条）+ 本轮问题。chat_cfg 传入避免重复读取配置（N-L8）。"""
+    cfg = chat_cfg if chat_cfg is not None else store.get_ai_config()["chat"]
     system_prompt = (cfg.get("prompt") or "").strip()
     messages: list[dict] = []
     if system_prompt:
@@ -72,8 +73,8 @@ def chat(body: ChatRequest, request: Request):
         return ok(ChatResponse(answer=answer, sources=[]).model_dump())
 
     context = retriever.build_context(sources)
-    messages = _build_messages(question, context, body.conversation_id)
     cfg = store.get_ai_config()["chat"]
+    messages = _build_messages(question, context, body.conversation_id, cfg)
     try:
         answer = llm.chat(AiItem(**cfg), messages)
     except RuntimeError as exc:
@@ -97,6 +98,9 @@ def chat_stream(body: ChatRequest, request: Request):
     question = body.question.strip()
     if not question:
         raise HTTPException(status_code=400, detail="问题不能为空。")
+    # N-M1 修复：预校验会话存在性（与非流式一致返回 404），避免流中静默断流
+    if body.conversation_id is not None and store.get_conversation(body.conversation_id) is None:
+        raise HTTPException(status_code=404, detail="对话不存在或已被删除。")
 
     sources = _do_retrieve(question, body.top_k)
 
@@ -114,10 +118,11 @@ def chat_stream(body: ChatRequest, request: Request):
             yield _sse({"type": "done"})
             return
 
-        yield _sse({"type": "sources", "sources": [Source(**s).model_dump() for s in sources]})
+        # N-M1：_build_messages 在首个 yield 之前执行（会话已预校验，不会 404）
         context = retriever.build_context(sources)
-        messages = _build_messages(question, context, body.conversation_id)
         cfg = store.get_ai_config()["chat"]
+        messages = _build_messages(question, context, body.conversation_id, cfg)
+        yield _sse({"type": "sources", "sources": [Source(**s).model_dump() for s in sources]})
         try:
             answer_parts: list[str] = []
             for delta in llm.chat_stream(AiItem(**cfg), messages):

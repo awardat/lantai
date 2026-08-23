@@ -115,6 +115,7 @@ class Store:
         conn = sqlite3.connect(self.db_path, timeout=10)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")  # N-L10：启用外键约束（与数据库设计文档一致）
         return conn
 
     def _query(self, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
@@ -333,6 +334,13 @@ class Store:
             with self._connect() as conn:
                 conn.execute("DELETE FROM messages WHERE conversation_id=?", (conv_id,))
                 cur = conn.execute("DELETE FROM conversations WHERE id=?", (conv_id,))
+                conn.commit()
+                return cur.rowcount > 0
+
+    def rename_conversation(self, conv_id: int, title: str) -> bool:
+        with self._lock:
+            with self._connect() as conn:
+                cur = conn.execute("UPDATE conversations SET title=? WHERE id=?", (title, conv_id))
                 conn.commit()
                 return cur.rowcount > 0
 
