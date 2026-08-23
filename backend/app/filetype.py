@@ -93,6 +93,8 @@ def text_readability(text: str) -> float:
     return max(0.0, min(1.0, score))
 
 
+# 可读性阈值（0.1.16 样本验证）：GBT 43052 伪文本（字符码）得分 0.0；
+# 正常中文/英文文本得分约 1.0；0.4 留出宽松余量，兼顾英文文档与少量噪声。
 READABILITY_THRESHOLD = 0.4
 
 
