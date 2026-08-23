@@ -101,8 +101,11 @@ def preview_document(doc_id: int):
         page_texts = [t for t, _ok in pages]  # 几何排序后的页面文本
         rendered = "\n\n".join(f"【第 {i + 1} 页】\n{p.strip()}" for i, p in enumerate(page_texts) if p and p.strip())
         note = ""
-        if category == "pdf_image" and not rendered:
-            note = "（本 PDF 为扫描件，无文本层；下方为浏览器原生渲染的原始页面，OCR 结果可在知识库中检索）"
+        if category == "pdf_image":
+            if filetype.pdf_is_pseudo_text(file_path):
+                note = "（检测到文本层但编码不可映射（内嵌字体缺 ToUnicode），复制粘贴为乱码；下方为浏览器原生渲染，内容经 OCR 识别后可检索）"
+            elif not rendered:
+                note = "（本 PDF 为扫描件，无文本层；下方为浏览器原生渲染的原始页面，OCR 结果可在知识库中检索）"
         return ok(
             {
                 "type": "pdf",

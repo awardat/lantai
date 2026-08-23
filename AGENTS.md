@@ -109,6 +109,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - ✅ 已执行：0.1.13（用户报告 PDF 预览触发下载后修复）：`preview/raw` 改为 `content_disposition_type="inline"`（iframe 浏览器原生查看器内联显示，不再触发下载）；`release/lantai-0.1.13-windows-x64/` 验证可运行。
 - ✅ 已执行：0.1.14 logo 变更（繁体"蘭臺"横排回纹 SVG）**已按用户指示暂时撤销**，代码与文档回退至 0.1.13（CH-028 标注已撤销）。
 - ✅ 已执行：0.1.15（用户提出后实施）：左上角品牌文字"兰台"改为繁体"**蘭臺**"（仅文字，其余不变）；`release/lantai-0.1.15-windows-x64/` 验证可运行。
+- ✅ 已执行：0.1.16（用户报告 GBT 43052 PDF 误判后修复）：`text_readability` 可读性检测（CJK/英文占比-字符码惩罚）＋pdfminer 空/不可读回退 pypdf（可读才采用，防伪文本入库）＋`pdf_image` 预览 note 说明"文本层编码不可映射（缺 ToUnicode），经 OCR 识别"；GBT 样本仍走 OCR（判定正确）、Asperger/扫描件回归不变；`release/lantai-0.1.16-windows-x64/` 验证可运行。
 - ⏳ **等待用户确认**后再进入后续迭代（RBAC、多平台、Docker、档位 3 等均只入需求与文档）。
 
 ## 会话注意事项

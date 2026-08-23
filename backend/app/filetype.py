@@ -74,12 +74,59 @@ def parse_docx(path: Path) -> str:
     return "\n".join(parts)
 
 
+_CHAR_CODE_TOKEN_RE = re.compile(r"/[A-Za-z0-9]{1,8}")
+_WORD_RE = re.compile(r"[A-Za-z]{3,}")
+
+
+def text_readability(text: str) -> float:
+    """0~1 文本可读性：CJK 占比 + 完整英文单词占比，扣减字符码 token（如 /G21/G22）。
+
+    用途：区分"真实文本"与"编码不可映射的字符码伪文本"（内嵌字体缺 ToUnicode 的 PDF）。
+    """
+    if not text:
+        return 0.0
+    total = len(text)
+    cjk = sum(1 for ch in text if "\u4e00" <= ch <= "\u9fff" or "\u3400" <= ch <= "\u4dbf")
+    word_chars = sum(len(w) for w in _WORD_RE.findall(text))
+    code_tokens = len(_CHAR_CODE_TOKEN_RE.findall(text))
+    score = (cjk * 1.5 + word_chars) / total + 0.5 - code_tokens * 4 / total
+    return max(0.0, min(1.0, score))
+
+
+READABILITY_THRESHOLD = 0.4
+
+
+def pdf_is_pseudo_text(path: Path) -> bool:
+    """检测"文本层存在但编码不可映射"（pypdf 能提取出字符码伪文本，可读性低）。"""
+    from pypdf import PdfReader
+
+    try:
+        reader = PdfReader(str(path))
+        full = "\n".join((p.extract_text() or "") for p in reader.pages)
+    except Exception:
+        return False
+    return len(full) >= config.PDF_TEXT_MIN_CHARS and text_readability(full) < READABILITY_THRESHOLD
+
+
+def _pypdf_page_text(path: Path, page_index: int) -> str:
+    from pypdf import PdfReader
+
+    reader = PdfReader(str(path))
+    if page_index >= len(reader.pages):
+        return ""
+    try:
+        return reader.pages[page_index].extract_text() or ""
+    except Exception:
+        return ""
+
+
 def pdf_text_layers(path: Path) -> list[tuple[str, bool]]:
     """逐页提取文本（R117①：pdfminer layout 按位置取行 → 几何排序还原阅读顺序）。
 
     返回 [(页面文本, 是否文本页), ...]：
     - 页面文本：按阅读顺序（栏内 y 降序、x 升序）拼接的行；
-    - 是否文本页：该页有效文本 ≥ PDF_TEXT_MIN_CHARS 字符（页级判定，R117②）。
+    - 是否文本页：该页有效文本 ≥ PDF_TEXT_MIN_CHARS 字符且可读性达标（0.1.16 双引擎兜底：
+      pdfminer 空/不可读时回退 pypdf，仍不可读（如编码不可映射的伪文本）→ 判图片页走 OCR）。
     处理：跨页重复行（页眉/页脚模式）剔除、页顶/页底纯数字页码碎片剔除、基础双栏检测。
     """
     from collections import Counter
@@ -107,10 +154,18 @@ def pdf_text_layers(path: Path) -> list[tuple[str, bool]]:
     repeated = {t for t, c in Counter(all_lines).items() if c >= 3}
 
     pages_out: list[tuple[str, bool]] = []
-    for lines, height in zip(page_lines, heights):
+    for idx, (lines, height) in enumerate(zip(page_lines, heights)):
         ordered = _layout_order(lines, height, repeated)
         text = "\n".join(ordered).strip()
-        pages_out.append((text, len(text) >= config.PDF_TEXT_MIN_CHARS))
+        if len(text) >= config.PDF_TEXT_MIN_CHARS and text_readability(text) >= READABILITY_THRESHOLD:
+            pages_out.append((text, True))
+            continue
+        # 双引擎兜底：pdfminer 空/不可读 → 尝试 pypdf（0.1.16）
+        fallback = _pypdf_page_text(path, idx).strip()
+        if len(fallback) >= config.PDF_TEXT_MIN_CHARS and text_readability(fallback) >= READABILITY_THRESHOLD:
+            pages_out.append((fallback, True))
+        else:
+            pages_out.append((text, False))
     return pages_out
 
 
