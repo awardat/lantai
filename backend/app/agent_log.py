@@ -23,7 +23,7 @@ def setup_agent_logging() -> None:
     if any(isinstance(h, logging.FileHandler) for h in AGENT_LOGGER.handlers):
         return
     config.LOGS_DIR.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S-%f")  # L5：带微秒，避免同秒重启覆盖
     fh = logging.FileHandler(config.LOGS_DIR / f"agent-{ts}.log", encoding="utf-8")
     fh.setLevel(logging.INFO)
     fh.setFormatter(logging.Formatter("%(message)s"))  # 纯 JSON 行，便于解析

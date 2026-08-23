@@ -52,7 +52,7 @@ def _extract_text(doc: dict, file_path: Path, st: Store) -> tuple[str, str]:
         if len(text.strip()) < config.PDF_TEXT_MIN_CHARS:
             # 全部页面均无有效文本 → 判定为扫描件：先更新分类（失败时也不误导），再整文档走 OCR
             st.set_document_category(doc.get("id"), "pdf_image")
-            return _ocr_pdf(file_path, st), "pdf_image"
+            return _ocr_pdf(file_path, st, doc_id=doc.get("id")), "pdf_image"
         # 含 OCR 内容（图片页）→ 分类归为 pdf_image（0.1.11：避免单页扫描件显示为"文字 PDF"）
         final_category = "pdf_image" if ocr_pages else category
         return text, final_category
@@ -110,8 +110,8 @@ def _ocr_pdf_pages(file_path: Path, st: Store, page_nos: list[int], doc_id: int 
     return "\n\n".join(parts)
 
 
-def _ocr_pdf(file_path: Path, st: Store) -> str:
-    """扫描件 PDF：逐页提取图片 → OCR 模型识别。"""
+def _ocr_pdf(file_path: Path, st: Store, doc_id: int | None = None) -> str:
+    """扫描件 PDF：逐页提取图片 → OCR 模型识别（H1 修复：补 doc_id 参数）。"""
     cfg = st.get_ai_config()["pdf_image"]
     images = filetype.pdf_extract_page_images(file_path)
     if not images:

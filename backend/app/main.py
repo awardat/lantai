@@ -44,10 +44,13 @@ async def lifespan(app: FastAPI):
 def _setup_file_logging() -> None:
     """每次启动创建新的日志文件（data/logs/lantai-<启动时间戳>.log），保留最近 20 个。
 
-    仅向 root logger 追加文件 handler：uvicorn 自带控制台 handler 不受影响，
-    access/error 日志经传播同时写入文件。
+    M1 修复：开头幂等提前返回（root 已有 FileHandler 时不再创建 fh，避免 reload 场景句柄泄漏）。
     """
     from datetime import datetime
+
+    root = logging.getLogger()
+    if any(isinstance(h, logging.FileHandler) for h in root.handlers):
+        return  # 已配置（如 reload 场景），避免重复创建
 
     config.LOGS_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
@@ -56,13 +59,11 @@ def _setup_file_logging() -> None:
     fh.setLevel(logging.INFO)
     fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s"))
 
-    # 单点挂载（N-L7：挂载逻辑幂等，无冗余提前返回）：
+    # 单点挂载：
     # - root：业务日志（lantai 等）传播至此 → 控制台(uvicorn default) + 文件
     # - uvicorn：uvicorn.error 传播至此（propagate=True 默认）→ 控制台 + 文件
     # - uvicorn.access：propagate=False，自身挂 fh → 控制台(自带 access) + 文件
-    root = logging.getLogger()
-    if not any(isinstance(h, logging.FileHandler) for h in root.handlers):
-        root.addHandler(fh)
+    root.addHandler(fh)
     uv = logging.getLogger("uvicorn")
     uv.propagate = False
     if not any(isinstance(h, logging.FileHandler) for h in uv.handlers):

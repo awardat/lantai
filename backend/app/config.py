@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-APP_VERSION = "0.1.10"
+APP_VERSION = "0.1.12"
 APP_NAME = "lantai"
 
 
