@@ -104,6 +104,7 @@ python -m uvicorn app.main:app --port 8000
 ## 版本与发布
 
 - 版本规则：首个版本 **0.1.1**，每次变更**第三段 +1**（0.1.1 → 0.1.2 → …）。
+- **各版本号与修改内容见 `docs/03-增长迭代/版本记录.md`**（不在此罗列）。
 - 发布物：`release/lantai-0.1.x-windows-x64/`（PyInstaller one-dir 编译版，**不制作 setup 安装包**），随附 zip 压缩包。
 - 路线图与档位 3 方案（流式 SSE、对话历史、rerank、hybrid 检索、向量库替换、多跳聚合、RBAC、多平台）见 `docs/01-需求调研/需求池管理表.md` 与 `docs/02-方案设计/技术对接方案.md`。
 

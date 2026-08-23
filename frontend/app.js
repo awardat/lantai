@@ -252,6 +252,7 @@ settingsOverlay.addEventListener("click", (e) => {
 
 async function openSettings() {
   settingsOverlay.classList.remove("hidden");
+  $("#settings-panel").classList.add("panel-gate"); // 密码门禁：小窗口自适应
   $("#settings-gate").classList.remove("hidden");
   $("#settings-body").classList.add("hidden");
   $("#settings-password-input").value = "";
@@ -270,6 +271,7 @@ function closeSettings() {
 }
 
 function showSettingsBody() {
+  $("#settings-panel").classList.remove("panel-gate"); // 进入配置：切换为大窗口
   $("#settings-gate").classList.add("hidden");
   $("#settings-body").classList.remove("hidden");
   loadAiConfig();
