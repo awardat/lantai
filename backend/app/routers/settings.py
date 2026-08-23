@@ -47,7 +47,7 @@ def _masked_config() -> dict:
 
 
 @router.post("/verify")
-async def verify(body: VerifyRequest, response: Response):
+def verify(body: VerifyRequest, response: Response):
     if not security.check_rate_limit():
         raise HTTPException(status_code=429, detail="尝试次数过多，请 1 分钟后再试。")
     stored = store.get_setting("admin_password_hash", "")
@@ -67,13 +67,13 @@ async def verify(body: VerifyRequest, response: Response):
 
 
 @router.get("/ai")
-async def get_ai(session: str | None = Cookie(default=None, alias="lantai_session")):
+def get_ai(session: str | None = Cookie(default=None, alias="lantai_session")):
     _require_session(session)
     return ok(_masked_config())
 
 
 @router.put("/ai")
-async def put_ai(body: AiConfigPut, session: str | None = Cookie(default=None, alias="lantai_session")):
+def put_ai(body: AiConfigPut, session: str | None = Cookie(default=None, alias="lantai_session")):
     _require_session(session)
     current = store.get_ai_config()
     incoming = {k: v.model_dump() for k, v in body.items.items()}
@@ -82,26 +82,38 @@ async def put_ai(body: AiConfigPut, session: str | None = Cookie(default=None, a
             continue
         old = current[key]
         new = dict(old)
-        new.update({kk: vv for kk, vv in item.items() if kk in ("provider", "base_url", "model", "prompt", "temperature")})
+        new.update({kk: vv for kk, vv in item.items() if kk in ("provider", "base_url", "model", "prompt")})
+        provider = (item.get("provider") or "").strip()
+        if provider not in ("", "ollama", "openai-compatible"):
+            raise HTTPException(status_code=400, detail="provider 仅支持 ollama 或 openai-compatible。")
+        if provider:
+            new["provider"] = provider
+        temp = item.get("temperature")
+        if temp is not None:
+            try:
+                new["temperature"] = min(2.0, max(0.0, float(temp)))
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="temperature 必须是 0~2 之间的数字。") from None
         api_key = (item.get("api_key") or "").strip()
         if api_key and not api_key.startswith("****"):
             new["api_key"] = security.encrypt_api_key(api_key)
         else:
-            new["api_key"] = old.get("api_key", "")
+            # 保持原值（get_ai_config 已解密为明文，需重新加密后落库）
+            new["api_key"] = security.encrypt_api_key(old.get("api_key", ""))
         incoming[key] = new
     store.save_ai_config(incoming)
     return ok(_masked_config(), message="AI 配置已保存，立即生效。")
 
 
 @router.post("/ai/test")
-async def test_ai(body: TestRequest, session: str | None = Cookie(default=None, alias="lantai_session")):
+def test_ai(body: TestRequest, session: str | None = Cookie(default=None, alias="lantai_session")):
     _require_session(session)
     cfg = body.config.model_dump()
     item = dict(cfg)
     if (item.get("api_key") or "").startswith("****"):
         # 脱敏值：改用该槽位已保存的 Key
         stored = store.get_ai_config().get(body.key, {}).get("api_key", "")
-        item["api_key"] = security.decrypt_api_key(stored)
+        item["api_key"] = stored
     from ..schemas import AiItem
 
     try:
@@ -112,7 +124,7 @@ async def test_ai(body: TestRequest, session: str | None = Cookie(default=None, 
 
 
 @router.post("/password")
-async def change_password(body: PasswordChange, session: str | None = Cookie(default=None, alias="lantai_session")):
+def change_password(body: PasswordChange, session: str | None = Cookie(default=None, alias="lantai_session")):
     _require_session(session)
     stored = store.get_setting("admin_password_hash", "")
     if not stored or not security.verify_password(body.old_password, stored):
@@ -125,13 +137,13 @@ async def change_password(body: PasswordChange, session: str | None = Cookie(def
 
 
 @router.get("/tokens")
-async def list_tokens(session: str | None = Cookie(default=None, alias="lantai_session")):
+def list_tokens(session: str | None = Cookie(default=None, alias="lantai_session")):
     _require_session(session)
     return ok([TokenOut(**t).model_dump() for t in store.list_api_tokens()])
 
 
 @router.post("/tokens")
-async def create_token(body: TokenCreate, session: str | None = Cookie(default=None, alias="lantai_session")):
+def create_token(body: TokenCreate, session: str | None = Cookie(default=None, alias="lantai_session")):
     _require_session(session)
     plain = security.generate_api_token()
     tid = store.create_api_token(body.name, plain)
@@ -141,7 +153,7 @@ async def create_token(body: TokenCreate, session: str | None = Cookie(default=N
 
 
 @router.delete("/tokens/{token_id}")
-async def revoke_token(token_id: int, session: str | None = Cookie(default=None, alias="lantai_session")):
+def revoke_token(token_id: int, session: str | None = Cookie(default=None, alias="lantai_session")):
     _require_session(session)
     if not store.revoke_api_token(token_id):
         raise HTTPException(status_code=404, detail="Token 不存在或已吊销。")
@@ -149,7 +161,7 @@ async def revoke_token(token_id: int, session: str | None = Cookie(default=None,
 
 
 @router.get("/system/info")
-async def system_info():
+def system_info():
     import platform
     import sys
 

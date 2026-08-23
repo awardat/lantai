@@ -22,7 +22,7 @@ def _check_bearer(request: Request) -> None:
 
 
 @router.post("/chat")
-async def chat(body: ChatRequest, request: Request):
+def chat(body: ChatRequest, request: Request):
     _check_bearer(request)
     question = body.question.strip()
     if not question:
@@ -68,7 +68,7 @@ async def chat(body: ChatRequest, request: Request):
 
 
 @router.get("/search")
-async def search(q: str, top_k: int = 5):
+def search(q: str, top_k: int = 5):
     """仅检索不生成（调试 / 演示用）。"""
     q = (q or "").strip()
     if not q:

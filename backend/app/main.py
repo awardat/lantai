@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -18,15 +19,10 @@ from .store import Store
 
 logger = logging.getLogger("lantai")
 
-app = FastAPI(
-    title="兰台（lantai）本地 RAG 知识库",
-    version=config.APP_VERSION,
-    description="本地运行的 RAG 知识库演示系统",
-)
 
-
-@app.on_event("startup")
-def _startup() -> None:
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """启动初始化（L8 修复：以 lifespan 替代已废弃的 on_event）。"""
     config.ensure_dirs()
     st = Store()
     # 首次启动初始化：默认配置密码 / 会话密钥 / 版本号
@@ -40,10 +36,19 @@ def _startup() -> None:
         logger.info("前端静态资源：%s", config.FRONTEND_DIR)
     else:
         logger.warning("前端目录不存在：%s（仅 API 可用）", config.FRONTEND_DIR)
+    yield
+
+
+app = FastAPI(
+    title="兰台（lantai）本地 RAG 知识库",
+    version=config.APP_VERSION,
+    description="本地运行的 RAG 知识库演示系统",
+    lifespan=lifespan,
+)
 
 
 @app.exception_handler(HTTPException)
-async def _http_exc_handler(request: Request, exc: HTTPException) -> JSONResponse:
+def _http_exc_handler(request: Request, exc: HTTPException) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
         content={"code": exc.status_code, "message": exc.detail, "data": None},
@@ -51,7 +56,7 @@ async def _http_exc_handler(request: Request, exc: HTTPException) -> JSONRespons
 
 
 @app.exception_handler(RequestValidationError)
-async def _validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+def _validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     first = exc.errors()[0] if exc.errors() else {}
     loc = ".".join(str(x) for x in first.get("loc", []) if x != "body")
     msg = first.get("msg", "参数错误")
@@ -62,7 +67,7 @@ async def _validation_handler(request: Request, exc: RequestValidationError) -> 
 
 
 @app.exception_handler(Exception)
-async def _unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
+def _unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.exception("未处理异常：%s", exc)
     return JSONResponse(
         status_code=500,

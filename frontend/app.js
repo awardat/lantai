@@ -366,6 +366,9 @@ function collectAiItem(key) {
 
 async function testAi(key) {
   const item = collectAiItem(key);
+  if (!item.api_key && aiConfigCache && aiConfigCache[key] && aiConfigCache[key].api_key) {
+    item.api_key = aiConfigCache[key].api_key; // 未填新 Key 时用已保存的（脱敏值，后端自动换存储值）
+  }
   try {
     const r = await api("/api/settings/ai/test", { method: "POST", body: { key, config: item } });
     const models = (r && r.models) || [];

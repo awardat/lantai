@@ -1,5 +1,5 @@
-"""批量导入演示文档（开发自测用）：把指定目录（默认 docs/）下的白名单文件
-通过上传 API 导入兰台。
+"""批量导入演示文档（开发自测用）：把指定目录（默认 docs/演示文档/）下的白名单
+文件通过上传 API 导入兰台（L6 修复：默认目录不再指向设计文档目录）。
 
 用法：python import_docs.py [目录] [--base http://127.0.0.1:8000]
 前置：兰台服务已启动。
@@ -7,21 +7,24 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 import httpx
 
 ALLOWED = {".txt", ".md", ".pdf", ".docx", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
+DEFAULT_DIR = Path(__file__).resolve().parent.parent / "docs" / "演示文档"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="导入演示文档到兰台")
-    parser.add_argument("dir", nargs="?", default=str(Path(__file__).resolve().parent.parent / "docs"))
+    parser.add_argument("dir", nargs="?", default=str(DEFAULT_DIR))
     parser.add_argument("--base", default="http://127.0.0.1:8000")
     args = parser.parse_args()
 
     root = Path(args.dir)
+    if not root.exists():
+        print(f"目录不存在：{root}\n请把演示文档放入 {DEFAULT_DIR} 或指定目录。")
+        return
     files = [p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in ALLOWED]
     if not files:
         print(f"目录中没有可导入的文件：{root}")

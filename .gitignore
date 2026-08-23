@@ -15,7 +15,10 @@ scripts/sample_docs/
 release/
 dist/
 build/
+
+# 构建配置（spec 已入库于 scripts/build/，构建时用 --specpath scripts/build 避免根目录生成）
 *.spec
+!scripts/build/lantai.spec
 
 # 临时与系统
 .DS_Store

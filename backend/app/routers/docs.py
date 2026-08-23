@@ -20,14 +20,14 @@ def _doc_out(doc: dict) -> DocumentOut:
 
 
 @router.post("/upload")
-async def upload_document(file: UploadFile = File(...), background: BackgroundTasks = BackgroundTasks()):
+def upload_document(file: UploadFile = File(...), background: BackgroundTasks = BackgroundTasks()):
     ext = Path(file.filename or "").suffix.lower()
     if ext not in config.ALLOWED_EXTS:
         raise HTTPException(
             status_code=415,
             detail=f"不支持的文件类型（{ext or '无扩展名'}）。支持：txt / md / pdf / docx / 图片（png、jpg、jpeg、webp、bmp、gif）。",
         )
-    data = await file.read()
+    data = file.file.read()  # def 端点：同步读取上传内容（FastAPI 线程池执行）
     if len(data) > config.MAX_UPLOAD_MB * 1024 * 1024:
         raise HTTPException(status_code=413, detail=f"文件超过 {config.MAX_UPLOAD_MB}MB 限制，请压缩后重试。")
     if not data:
@@ -48,13 +48,13 @@ async def upload_document(file: UploadFile = File(...), background: BackgroundTa
 
 
 @router.get("")
-async def list_documents():
+def list_documents():
     docs = [_doc_out(d).model_dump() for d in store.list_documents()]
     return ok(docs)
 
 
 @router.get("/{doc_id}")
-async def get_document(doc_id: int):
+def get_document(doc_id: int):
     doc = store.get_document(doc_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="文档不存在或已被删除。")
@@ -62,7 +62,7 @@ async def get_document(doc_id: int):
 
 
 @router.delete("/{doc_id}")
-async def delete_document(doc_id: int):
+def delete_document(doc_id: int):
     doc = store.delete_document(doc_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="文档不存在或已被删除。")
@@ -76,7 +76,7 @@ async def delete_document(doc_id: int):
 
 
 @router.get("/{doc_id}/preview")
-async def preview_document(doc_id: int):
+def preview_document(doc_id: int):
     """Web 内预览：返回按类型渲染的文本内容（图片返回 raw 直出提示）。"""
     doc = store.get_document(doc_id)
     if doc is None:
@@ -113,7 +113,7 @@ async def preview_document(doc_id: int):
 
 
 @router.get("/{doc_id}/preview/raw")
-async def preview_raw(doc_id: int):
+def preview_raw(doc_id: int):
     """源文件直出（图片原样展示；其他类型浏览器内打开或下载）。"""
     doc = store.get_document(doc_id)
     if doc is None:

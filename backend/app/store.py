@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS chunks (
   embedding BLOB NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_chunks_document ON chunks(document_id);
+CREATE INDEX IF NOT EXISTS idx_docs_status ON documents(status);
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -72,6 +73,7 @@ CREATE TABLE IF NOT EXISTS api_tokens (
   last_used_at TEXT,
   revoked INTEGER NOT NULL DEFAULT 0
 );
+CREATE INDEX IF NOT EXISTS idx_tokens_revoked ON api_tokens(revoked);
 """
 
 
@@ -87,7 +89,11 @@ class Store:
         self._lock = threading.Lock()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
-            conn.executescript(_SCHEMA)
+            # 用 user_version 标记 schema 版本，避免每次实例化重复建表（L7）
+            version = conn.execute("PRAGMA user_version").fetchone()[0]
+            if version < 1:
+                conn.executescript(_SCHEMA)
+                conn.execute("PRAGMA user_version=1")
 
     # ------------------------------------------------------------ 基础连接
     def _connect(self) -> sqlite3.Connection:
@@ -178,8 +184,17 @@ class Store:
         )
         if not rows:
             return []
+        # L9 修复：检测向量维度一致性，避免 np.vstack 维度不一时裸抛异常
+        q_vec32 = np.asarray(query_vec, dtype=np.float32)
+        q_dim = int(q_vec32.size)
+        dims = {np.frombuffer(r["embedding"], dtype=np.float32).size for r in rows}
+        if len(dims) > 1 or q_dim not in dims:
+            raise RuntimeError(
+                "检测到知识库切片向量维度不一致（可能更换过 embedding 模型）："
+                "请删除旧文档后重新上传，或在设置中恢复原 embedding 模型。"
+            )
         mat = np.vstack([np.frombuffer(r["embedding"], dtype=np.float32) for r in rows])
-        q = np.asarray(query_vec, dtype=np.float32).reshape(1, -1)
+        q = q_vec32.reshape(1, -1)
         # 余弦相似度
         norms = np.linalg.norm(mat, axis=1, keepdims=True)
         norms[norms == 0] = 1.0
@@ -221,19 +236,31 @@ class Store:
 
     # ------------------------------------------------------------ AI 配置
     def get_ai_config(self) -> dict[str, dict[str, Any]]:
-        """读取 AI 配置，与默认值合并（未配置项回退默认）。"""
+        """读取 AI 配置，与默认值合并（未配置项回退默认）；api_key 返回解密后的明文。
+
+        S1 修复：所有调用路径（chat/retriever/pipeline）直接使用本方法返回值，
+        故在此统一解密，避免各调用处遗漏。
+        """
+        from . import security  # 延迟导入，避免与 security 模块循环依赖
+
         raw = self.get_setting("ai_config")
         saved = json.loads(raw) if raw else {}
         out: dict[str, dict[str, Any]] = {}
         for key in AI_CONFIG_KEYS:
             item = dict(DEFAULT_AI_CONFIG[key])
             item.update(saved.get(key, {}))
+            if item.get("api_key"):
+                item["api_key"] = security.decrypt_api_key(item["api_key"])
             out[key] = item
         return out
 
     def save_ai_config(self, cfg: dict[str, dict[str, Any]]) -> None:
-        clean = {k: v for k, v in cfg.items() if k in AI_CONFIG_KEYS}
-        self.set_setting("ai_config", json.dumps(clean, ensure_ascii=False))
+        """保存 AI 配置（M1 修复：与现有值合并，未提交的槽位保留原值）。"""
+        current = self.get_ai_config()
+        for key, value in cfg.items():
+            if key in AI_CONFIG_KEYS:
+                current[key] = value
+        self.set_setting("ai_config", json.dumps(current, ensure_ascii=False))
 
     # ------------------------------------------------------------ API token
     def create_api_token(self, name: str, token_plain: str) -> int:
