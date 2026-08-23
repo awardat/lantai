@@ -1,4 +1,4 @@
-# 兰台（lantai）后端运行时依赖（v0.1.13）
+# 兰台（lantai）后端运行时依赖（v0.1.15）
 # 本机 Python 3.14.7，全部依赖已验证兼容（cp314 wheel 或纯 Python）
 fastapi>=0.141,<0.142
 uvicorn>=0.30

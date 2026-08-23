@@ -77,6 +77,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - ✅ 已执行：0.1.12（用户确认整改方案后实施）：H1 `_ocr_pdf` 补 doc_id（扫描件+视觉不可用 NameError 修复）、H2 requirements 补 pdfminer.six、H3 config 版本同步、M1 日志挂载幂等提前返回、M2 数据库文档预留表清理、L1-L5 文档同步、L8 §9.2 复核；L6/L7 延后；`release/lantai-0.1.12-windows-x64/` 验证可运行。
 - ✅ 已执行：0.1.13（用户报告 PDF 预览触发下载后修复）：`preview/raw` 改为 `content_disposition_type="inline"`（iframe 浏览器原生查看器内联显示，不再触发下载）；`release/lantai-0.1.13-windows-x64/` 验证可运行。
 - ✅ 已执行：0.1.14 logo 变更（繁体"蘭臺"横排回纹 SVG）**已按用户指示暂时撤销**，代码与文档回退至 0.1.13（CH-028 标注已撤销）。
+- ✅ 已执行：0.1.15（用户提出后实施）：左上角品牌文字"兰台"改为繁体"**蘭臺**"（仅文字，其余不变）；`release/lantai-0.1.15-windows-x64/` 验证可运行。
 - ⏳ **等待用户确认**后再进入后续迭代（RBAC、多平台、Docker、档位 3 等均只入需求与文档）。
 
 ## 会话注意事项
