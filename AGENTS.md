@@ -23,6 +23,7 @@ release/               # 编译发布目录（见"版本与发布"）
 scripts/               # 开发自测脚本（make_sample_docs.py 等）
 docs/演示文档/          # 用户演示文档目录（用户提供，import_docs.py 默认导入此目录）
 sample/                # 测试样本 PDF（用户提供：扫描件 / Asperger 论文 OCR 样本，不入库）
+knowledge/             # 独立知识备忘（与本项目无关，用户要求沉淀，不参与项目流程）
 backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 ```
 
