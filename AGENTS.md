@@ -118,6 +118,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - ✅ 已执行：0.1.18（用户提出后实施）：**批量上传浮层**（点击"上传文档"展开，拖拽即传+保留选择文件按钮，前端小并发上传、列表实时状态）；**解析队列**（FIFO + 固定并发 worker 默认 10，设置页「解析」可调 1~50 即时生效；文档新增"排队中"状态；重启自动恢复排队文档）；`release/lantai-0.1.18-windows-x64/` 验证可运行。
 - ✅ 已执行：0.1.19（用户确认壳方案后实施，CH-037/R119）：**桌面壳（lantai-shell）**——复用 C:\code\dsh-ui 的 Tauri 2 壳工程至 `shell/`：ConPTY 无窗口拉起兰台服务（`lantai.exe --server` 新增参数不开浏览器）、就绪探测 8000 后 iframe 内嵌页面、终端浮层（日志/重启/停止）、Job Object 关闭清理、单实例、缩放、便携模式；直接运行 `lantai.exe` 保持原控制台模式；绿色便携 `release/lantai-shell-0.1.19-windows-x64/`（不建 setup）；文档：桌面壳方案（docs/02）、R119、CH-037、版本记录、README。
 - ✅ 已执行：0.1.20（用户报告缺陷后修复，CH-039）：**壳"localhost 拒绝连接"**——裸 cargo build 缺 `tauri/custom-protocol` feature 导致 release exe 处于 dev 模式加载 devUrl（localhost:1420）；修复：显式启用 custom-protocol（Cargo.toml 注释说明 + 壳文档）；**发行版不含测试数据**（绿色目录/zip 不再打包 data/，AGENTS.md 增硬性条款）；CDP 实测主窗口加载 tauri:// 本地资产 + iframe 显示兰台页面。
+- ✅ 已执行：0.1.21（用户报告后修复，CH-040）：**壳终端按钮遮挡输入区**——终端浮层按钮固定在窗口右下角遮挡兰台"提问"按钮；修复：输入区 `.chat-composer` 右侧留 88px 占位（padding-right），浏览器直开同样留白保持一致。
 - ⏳ **等待用户确认**后再进入后续迭代（RBAC、多平台、Docker、档位 3 等均只入需求与文档）。
 
 ## 会话注意事项

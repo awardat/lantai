@@ -124,6 +124,9 @@ body {
 .chat-composer {
   display: flex; gap: 10px; align-items: flex-end;
   padding: 12px 24px 16px; border-top: 1px solid var(--line); background: var(--bg);
+  /* 右下角让位：桌面壳（lantai-shell）终端浮层按钮固定在窗口右下角（right 14px / bottom 14px，
+     宽约 62px），输入区右侧留出 88px 占位避免遮挡（浏览器直接打开时同样留白，保持一致性） */
+  padding-right: 88px;
 }
 #chat-input {
   flex: 1; resize: none; min-height: 44px; max-height: 140px;
