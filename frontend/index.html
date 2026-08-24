@@ -52,7 +52,7 @@
     <section id="view-docs" class="view">
       <div class="docs-toolbar">
         <button id="btn-upload" class="primary">上传文档</button>
-        <span class="hint">支持 txt / md / pdf / docx / 图片，单个 ≤ 20MB；可拖拽批量上传，解析按队列排队执行</span>
+        <span class="hint">支持 txt / md / pdf / docx / doc / wps / xls / xlsx / ppt / pptx / 图片，单个 ≤ 20MB；可拖拽批量上传，解析按队列排队执行</span>
       </div>
       <table class="doc-table">
         <thead>
@@ -75,10 +75,10 @@
       <div id="drop-zone" class="drop-zone">
         <div class="drop-icon">⬇</div>
         <p>将文件拖入此处上传</p>
-        <p class="hint">支持 txt / md / pdf / docx / 图片，单个 ≤ 20MB，可多选</p>
+        <p class="hint">支持 txt / md / pdf / docx / doc / wps / xls / xlsx / ppt / pptx / 图片，单个 ≤ 20MB，可多选</p>
         <button id="btn-pick-files" class="mini-btn">选择文件</button>
         <input type="file" id="upload-file-input" multiple hidden
-               accept=".txt,.md,.pdf,.docx,.png,.jpg,.jpeg,.webp,.bmp,.gif">
+               accept=".txt,.md,.pdf,.docx,.doc,.wps,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.bmp,.gif">
       </div>
       <div id="upload-list" class="upload-list"></div>
     </div>

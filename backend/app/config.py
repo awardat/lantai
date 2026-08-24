@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-APP_VERSION = "0.1.29"
+APP_VERSION = "0.1.30"
 APP_NAME = "lantai"
 
 
@@ -35,7 +35,10 @@ LOGS_DIR = DATA_DIR / "logs"
 FRONTEND_DIR = _frontend_dir()
 
 MAX_UPLOAD_MB = 20
-ALLOWED_EXTS = {".txt", ".md", ".pdf", ".docx", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
+ALLOWED_EXTS = {
+    ".txt", ".md", ".pdf", ".docx", ".doc", ".wps", ".xls", ".xlsx", ".ppt", ".pptx",
+    ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif",
+}
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 
 DEFAULT_HOST = "127.0.0.1"

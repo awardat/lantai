@@ -1,4 +1,4 @@
-# 兰台（lantai）后端运行时依赖（v0.1.28）
+# 兰台（lantai）后端运行时依赖（v0.1.30）
 # 本机 Python 3.14.7，全部依赖已验证兼容（cp314 wheel 或纯 Python）
 fastapi>=0.141,<0.142
 uvicorn>=0.30
@@ -10,3 +10,8 @@ pypdf>=5.0
 pillow>=11.0
 python-docx>=1.1
 pdfminer.six>=20250101
+# 0.1.30：常见办公文档（doc/wps OLE2、xls、xlsx、pptx）
+olefile>=0.47
+xlrd>=2.0.1
+openpyxl>=3.1
+python-pptx>=1.0

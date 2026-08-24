@@ -132,6 +132,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - ✅ 已登记：**发布需确认（CH-049）**：必要文本保存到文档（不留存于会话）；变更实施完成后先交付说明（变更登记/版本同步/自测结论），**不自动构建发布**；用户确认"发布"后再构建 release 与 zip，再 git 提交推送。
 - ✅ 已执行：0.1.28（用户报告后修复 + 评审整改，CH-050/CH-051）：**拖放上传失效**——wry/WebView2 默认禁用 OS 文件拖放，壳 `.drag_and_drop(true)` 显式开启（CDP 模拟验证前端逻辑正常）；上传数量确认无限制；v0.1.27 评审整改（M1/M2/M3/L1/L2，L3~L6 沿用延后）。
 - ✅ 已执行：0.1.29（0.1.28 拖放修复未生效后继续修复，CH-052）：wry 注册 drag drop handler 时 `SetAllowExternalDrop(false)` 接管拖放、页面收不到 HTML5 drop；修复：保留 `.drag_and_drop(true)` + **`.disable_drag_drop_handler()`**（tauri 官方：Windows 前端用 HTML5 拖放必须禁用该 handler）；E2E 无回归，真机拖放待用户验证。
+- ✅ 已执行：0.1.30（用户提出后实施，CH-053）：**常见办公文档支持**——白名单新增 doc/wps/xls/xlsx/ppt/pptx（office 组）；解析：olefile（doc/wps OLE2 UTF-16LE 段提取）、xlrd（xls）、openpyxl（xlsx）、python-pptx（pptx 文本框/表格/分组）；ppt 无纯 Python 提取（提示）；解析器全容错；Mock 全链路回归通过。
 - ⏳ **等待用户确认**后再进入后续迭代（RBAC、多平台、Docker、档位 3 等均只入需求与文档）。
 
 ## 会话注意事项

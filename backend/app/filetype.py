@@ -31,7 +31,7 @@ def classify_ext(ext: str) -> str:
     ext = ext.lower()
     if ext in (".txt", ".md"):
         return "text"
-    if ext == ".docx":
+    if ext in (".docx", ".doc", ".wps", ".xls", ".xlsx", ".ppt", ".pptx"):
         return "office"
     if ext == ".pdf":
         return "pdf_text"  # 占位，解析时再判定是否 pdf_image
@@ -72,6 +72,160 @@ def parse_docx(path: Path) -> str:
                 cells = [c.text.strip() for c in row.cells]
                 parts.append(" | ".join(cells))
     return "\n".join(parts)
+
+
+# ---------- 0.1.30：常见办公文档（doc/wps/xls/xlsx/ppt/pptx） ----------
+
+# .doc/.wps 文本提取的最小可读段长度（连续可打印字符数低于此视为噪声丢弃）
+_OLE_MIN_RUN = 4
+
+
+def _ole_utf16le_runs(data: bytes) -> list[str]:
+    """从字节流中提取连续可读文本段（UTF-16LE 解码 + 可打印过滤，演示级）。
+
+    OLE2 二进制文档（.doc/.wps）的 WordDocument 流以 UTF-16LE 存储文本，
+    简化提取：按 2 字节步长解码，保留连续可打印字符运行。
+    """
+    runs: list[str] = []
+    cur: list[str] = []
+    for i in range(0, len(data) - 1, 2):
+        cp = data[i] | (data[i + 1] << 8)
+        if cp in (0, 0x0D, 0x0A, 0x09) or (0x20 <= cp < 0xFFFF):
+            ch = chr(cp)
+            if ch.isprintable() or ch in "\r\n\t":
+                cur.append(ch)
+                continue
+        if len(cur) >= _OLE_MIN_RUN:
+            runs.append("".join(cur).strip())
+        cur = []
+    if len(cur) >= _OLE_MIN_RUN:
+        runs.append("".join(cur).strip())
+    return runs
+
+
+def parse_doc(path: Path) -> str:
+    """.doc（Word 97-2003 OLE2）→ 文本（演示级：WordDocument 流 UTF-16LE 段提取）。"""
+    import olefile
+
+    try:
+        with olefile.OleFileIO(str(path)) as ole:
+            if not ole.exists("WordDocument"):
+                return ""
+            data = ole.openstream("WordDocument").read()
+    except Exception:
+        # 非 OLE2 文件（损坏/伪装扩展名）→ 返回空，由上层提示"未能提取文本"
+        return ""
+    runs = _ole_utf16le_runs(data)
+    # 可读性兜底：提取结果过差（如仅噪声）返回空串，由上层提示
+    text = "\n".join(runs).strip()
+    return text if text_readability(text) >= 0.15 else ""
+
+
+def parse_wps(path: Path) -> str:
+    """.wps（WPS 文字，OLE2 与 Word 兼容）→ 文本（同 .doc 提取）。"""
+    return parse_doc(path)
+
+
+def parse_xls(path: Path) -> str:
+    """.xls（Excel 97-2003）→ 单元格文本拼接。"""
+    import xlrd
+
+    try:
+        book = xlrd.open_workbook(str(path))
+    except Exception:
+        return ""  # 非 xls（损坏/伪装扩展名）→ 空，由上层提示
+    parts: list[str] = []
+    for sheet in book.sheets():
+        for row in range(sheet.nrows):
+            cells = []
+            for col in range(sheet.ncols):
+                v = sheet.cell_value(row, col)
+                if isinstance(v, float) and v == int(v):
+                    v = int(v)
+                if v not in (None, ""):
+                    cells.append(str(v))
+            if cells:
+                parts.append(" | ".join(cells))
+    return "\n".join(parts)
+
+
+def parse_xlsx(path: Path) -> str:
+    """.xlsx → 单元格文本拼接。"""
+    from openpyxl import load_workbook
+
+    try:
+        wb = load_workbook(str(path), read_only=True, data_only=True)
+    except Exception:
+        return ""  # 非 xlsx（损坏/伪装扩展名）→ 空，由上层提示
+    parts: list[str] = []
+    for ws in wb.worksheets:
+        for row in ws.iter_rows(values_only=True):
+            cells = [str(c).strip() for c in row if c is not None and str(c).strip()]
+            if cells:
+                parts.append(" | ".join(cells))
+    wb.close()
+    return "\n".join(parts)
+
+
+def _shape_text(shape) -> str:
+    """递归提取 shape 文本（含文本框/表格/分组）。"""
+    from pptx.enum.shapes import MSO_SHAPE_TYPE
+
+    out: list[str] = []
+    st = shape.shape_type
+    if st == MSO_SHAPE_TYPE.GROUP:
+        for sub in shape.shapes:
+            out.append(_shape_text(sub))
+        return "\n".join(out)
+    if st == MSO_SHAPE_TYPE.TABLE:
+        for row in shape.table.rows:
+            cells = [c.text.strip() for c in row.cells if c.text.strip()]
+            if cells:
+                out.append(" | ".join(cells))
+        return "\n".join(out)
+    if shape.has_text_frame:
+        for para in shape.text_frame.paragraphs:
+            t = "".join(run.text for run in para.runs).strip()
+            if t:
+                out.append(t)
+    return "\n".join(out)
+
+
+def parse_pptx(path: Path) -> str:
+    """.pptx → 幻灯片文本框/表格文本。"""
+    from pptx import Presentation
+
+    try:
+        prs = Presentation(str(path))
+    except Exception:
+        return ""  # 非 pptx（损坏/伪装扩展名）→ 空，由上层提示
+    parts: list[str] = []
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            t = _shape_text(shape).strip()
+            if t:
+                parts.append(t)
+    return "\n".join(parts)
+
+
+def parse_office(path: Path, ext: str) -> str:
+    """office 类统一解析入口（按扩展名分发，0.1.30）。"""
+    ext = ext.lower()
+    if ext == ".docx":
+        return parse_docx(path)
+    if ext == ".doc":
+        return parse_doc(path)
+    if ext == ".wps":
+        return parse_wps(path)
+    if ext == ".xls":
+        return parse_xls(path)
+    if ext == ".xlsx":
+        return parse_xlsx(path)
+    if ext == ".pptx":
+        return parse_pptx(path)
+    if ext == ".ppt":
+        return ""  # .ppt 为 OLE2 二进制演示文稿，暂无可靠纯 Python 提取，返回空由上层提示
+    return ""
 
 
 _CHAR_CODE_TOKEN_RE = re.compile(r"/[A-Za-z0-9]{1,8}")

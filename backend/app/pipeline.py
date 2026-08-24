@@ -33,7 +33,9 @@ def _extract_text(doc: dict, file_path: Path, st: Store) -> tuple[str, str]:
     if category == "text":
         return filetype.read_text_file(file_path), category
     if category == "office":
-        return filetype.parse_docx(file_path), category
+        # 0.1.30：doc/wps/xls/xlsx/ppt/pptx 按扩展名分发；.ppt 二进制演示文稿无纯 Python
+        # 提取方案，可能返回空 → 下方空文本统一走"文本提取受限"提示
+        return filetype.parse_office(file_path, doc.get("ext", "")), category
     if category == "pdf_text":
         # R117② 页级判定：文本页走几何排序提取，图片页（无文本层）走 OCR
         pages = filetype.pdf_text_layers(file_path)
