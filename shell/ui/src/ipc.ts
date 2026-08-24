@@ -9,6 +9,7 @@ export interface AppState {
   message?: string;
   url: string;
   zoom: number;
+  version?: string;
 }
 
 export interface Settings {
@@ -61,6 +62,7 @@ export interface StateChangedPayload {
   message?: string;
   url: string;
   zoom: number;
+  version?: string;
 }
 
 export interface TerminalDataPayload {

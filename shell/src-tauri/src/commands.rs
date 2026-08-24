@@ -15,6 +15,7 @@ pub fn get_state(_app: AppHandle, state: Inner<'_>) -> serde_json::Value {
         "message": g.message,
         "url": g.url,
         "zoom": g.zoom,
+        "version": env!("CARGO_PKG_VERSION"),  // 终端标题栏版本标识（与 Cargo.toml 同步）
     })
 }
 

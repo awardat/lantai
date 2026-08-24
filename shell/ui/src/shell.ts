@@ -24,6 +24,7 @@ const errorText = document.getElementById("error-text")!;
 const floatBtn = document.getElementById("float-btn")!;
 const floatDot = document.getElementById("float-dot")!;
 const panel = document.getElementById("panel")!;
+const panelTitle = document.getElementById("panel-title")!;
 const stateChip = document.getElementById("panel-state")!;
 const zoomLabel = document.getElementById("btn-zoom-label") as HTMLButtonElement;
 const logEl = document.getElementById("panel-log")!;
@@ -100,9 +101,13 @@ function fitBootTerm() {
 // ---------- 状态 ----------
 let url = "http://127.0.0.1:8000/";
 
-function applyState(p: { phase: string; message?: string; url: string; zoom: number }) {
+function applyState(p: { phase: string; message?: string; url: string; zoom: number; version?: string }) {
   url = p.url;
   zoomLabel.textContent = `${Math.round(p.zoom * 100)}%`;
+  // 终端标题栏版本标识（version 来自 Rust CARGO_PKG_VERSION，与壳版本同步）
+  if (p.version) {
+    panelTitle.textContent = `兰台终端 · v${p.version}`;
+  }
 
   floatDot.classList.remove("ok", "err", "boot", "stop");
   stateChip.classList.remove("ok", "err", "boot", "stop");

@@ -97,6 +97,7 @@ pub fn emit_state(app: &AppHandle, inner: &Arc<Mutex<AppInner>>) {
             "message": g.message,
             "url": g.url,
             "zoom": g.zoom,
+            "version": env!("CARGO_PKG_VERSION"),  // 终端标题栏版本标识（与 Cargo.toml 同步）
         }),
     );
 }
