@@ -116,7 +116,7 @@ def chat(
     except Exception as exc:  # noqa: BLE001
         agent_log.log_call(
             slot=slot, provider=item.provider, base_url=base, model=item.model,
-            messages=messages, ok=False, error=str(exc),
+            messages=messages, ok=False, error=_friendly_error(exc, base),
             duration_ms=int((time.monotonic() - t0) * 1000),
             conv_id=conv_id, doc_id=doc_id,
         )
@@ -186,7 +186,7 @@ def chat_stream(
         agent_log.log_call(
             slot=slot, provider=item.provider, base_url=base, model=item.model,
             messages=messages, reasoning="".join(full_reasoning), answer="".join(full_content),
-            ok=False, error=str(exc), duration_ms=int((time.monotonic() - t0) * 1000),
+            ok=False, error=_friendly_error(exc, base), duration_ms=int((time.monotonic() - t0) * 1000),
             conv_id=conv_id, doc_id=doc_id, stream=True,
         )
         raise RuntimeError(_friendly_error(exc, base)) from exc

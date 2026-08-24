@@ -246,12 +246,34 @@ async function loadParseTab() {
   if (s) $("#parse-concurrency").value = s.concurrency;
 }
 
-// 手动指定文件类型重试选项（0.1.36，CH-063）：与后端 ALLOWED_EXTS 保持一致（后端校验兜底）
-const RETRY_EXTS = [".txt", ".md", ".pdf", ".docx", ".doc", ".wps", ".xls", ".xlsx", ".ppt", ".pptx", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"];
-const retryExtOptions = '<option value="">按原类型</option>' + RETRY_EXTS.map((e) => `<option value="${e}">${e}</option>`).join("");
+// 手动指定文件大类重试选项（0.1.37，CH-065）：用于识别问题手工兜底（如扫描件误判
+// 文字 PDF 时指定"图片 PDF（OCR）"走 OCR 通道）；具体扩展名指定（0.1.36 CH-063）
+// 后端接口仍保留（API 调用兼容），前端统一按大类选择
+const RETRY_CATEGORIES = [
+  ["text", "文本（txt/md）"],
+  ["office", "Office 文档"],
+  ["pdf_text", "文字 PDF"],
+  ["pdf_image", "图片 PDF（OCR）"],
+  ["image", "图片"],
+];
+const retryCatOptions = '<option value="">按原类型</option>' + RETRY_CATEGORIES.map(([v, label]) => `<option value="${v}">${label}</option>`).join("");
+
+// 文件计数 + 分类筛选联动（0.1.37，用户提出）：筛选按钮实时显示各状态文件数
+const FILTER_LABELS = { "": "全部", ready: "已就绪", queued: "排队中", parsing: "解析中", failed: "失败" };
+
+function updateDocCounts(docs) {
+  const counts = { "": docs.length, ready: 0, queued: 0, parsing: 0, failed: 0 };
+  for (const d of docs) if (counts[d.status] !== undefined) counts[d.status]++;
+  document.querySelectorAll("#doc-filter .filter-btn").forEach((btn) => {
+    const st = btn.dataset.status || "";
+    btn.textContent = `${FILTER_LABELS[st] || st} (${counts[st]})`;
+  });
+}
 
 function renderDocs(docs) {
   const tbody = $("#doc-tbody");
+  // 文件计数（0.1.37）：全量统计后渲染到筛选按钮（计数与筛选联动，轮询期间实时更新）
+  updateDocCounts(docs);
   // 状态筛选（0.1.34，CH-060）：按当前筛选状态过滤后渲染
   const filtered = docFilter ? docs.filter((d) => d.status === docFilter) : docs;
   if (!filtered.length) {
@@ -263,8 +285,8 @@ function renderDocs(docs) {
     const [stateCls, stateText] = stateMap[d.status] || ["parsing", d.status];
     // 失败原因悬停提示：escAttr 转义引号，避免 error 含 " 破坏 title 属性（CH-060/M1）
     const errorTip = d.error ? ` title="${escAttr(d.error)}"` : "";
-    // 失败行：类型下拉（指定后重试按该类型解析）+ 重试按钮（0.1.34/0.1.36）
-    const retryBox = d.status === "failed" ? `<select class="retry-type" data-id="${d.id}" title="选择文件真实类型后点「重试」，将按指定类型重新解析（伪装扩展名导致失败时使用）">${retryExtOptions}</select>
+    // 失败行：大类下拉（指定后重试按该大类解析，识别问题手工兜底）+ 重试按钮（0.1.34/0.1.37）
+    const retryBox = d.status === "failed" ? `<select class="retry-type" data-id="${d.id}" title="文件被识别错时手动指定真实大类后点「重试」（如扫描件指定「图片 PDF（OCR）」）">${retryCatOptions}</select>
         <button class="mini-btn" onclick="retryDoc(${d.id})">重试</button>` : "";
     return `<tr>
       <td>${esc(d.name)}</td>
@@ -282,11 +304,11 @@ function renderDocs(docs) {
   }).join("");
 }
 
-// 失败文档重新提交解析（0.1.34，CH-060；0.1.36 支持携带手动指定类型 ext）
+// 失败文档重新提交解析（0.1.34，CH-060；0.1.36 支持 ext；0.1.37 支持 category 大类）
 async function retryDoc(id) {
   const sel = document.querySelector(`.retry-type[data-id="${id}"]`);
   const body = {};
-  if (sel && sel.value) body.ext = sel.value;
+  if (sel && sel.value) body.category = sel.value;
   try {
     const r = await api(`/api/docs/${id}/retry`, { method: "POST", body });
     toast(r && r.message ? r.message : "已重新提交解析。", "success");

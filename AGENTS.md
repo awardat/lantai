@@ -142,6 +142,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - ✅ 已执行：0.1.34（用户提出后实施，CH-060）：**文档清单状态筛选（全部/已就绪/排队中/解析中/失败）+ 失败原因悬停（escAttr 转义）+ 失败重试**（`POST /api/docs/{id}/retry` + 失败行重试按钮）；实测重试链路通过。
 - ✅ 已执行：0.1.35（用户确认 Ox-v0.1.34 评审整改，CH-062）：L1 上传 415 文案由 `ALLOWED_EXTS` 动态生成（补 6 种 office 扩展名）；L4 retry"校验+置 queued"合并 store 层原子条件 UPDATE（并发重试不双入队）；D1~D3 文档同步（技术对接方案 §6.1/测试方案 TC-125~127/README 功能一览）；L2/L3（Cargo.lock、requirements 注释头）按 CH-061 规则不计评审项，随版本同步义务刷新；流程固化：**文档同步须在等待提交前完成**（CH-062）。
 - ✅ 已执行：0.1.36（用户提出后实施，CH-063）：**失败文件手动指定文件类型重试**——失败行新增类型下拉（按原类型 + 全白名单扩展名），`POST /api/docs/{id}/retry` 可选 body `{"ext":".docx"}`（白名单校验、自动更新 ext/category 后按新类型重新解析；不传行为不变）；实测伪装 .ppt（实为 docx）→ 指定 .docx → 解析成功。
+- ✅ 已执行：0.1.37（用户确认四项合并修复 + 文件计数/审核整改，CH-064~068）：**① CH-064** 壳终端标题版本号未同步——`build_release.ps1` 内置壳 release 构建（[1/7] cargo build --release，不再依赖手工前置），发布物壳 exe 版本始终同步；**② CH-065** 失败重试类型下拉改为**文件大类**（文本/Office/文字 PDF/图片 PDF·OCR/图片），识别问题手工兜底，retry 可选 body `{"category":...}`（与 ext 互斥，大类联动扩展名 pdf→.pdf、image→.png、text→.txt）；**③ CH-066** 视觉 400"仅支持 jpg\bmp\webp\gif\png"——GBT 20519 PDF 内嵌 23 张 TIFF 所致，发送前 Pillow 探测并按需统一转码 JPEG（`normalize_image_for_vision`，覆盖 OCR/图片描述/页内图三处）；**④ CH-067** agent 日志失败分支改记 `_friendly_error`（含上游响应体前 200 字符，非 httpx 通用文案）；**⑤ CH-068** 文件管理筛选按钮实时显示各状态文件数（全部/已就绪/排队中/解析中/失败，轮询联动）+ 审核报告 v0.1.37 L1 整改（技术对接方案补 MiMo/TIFF 转码/category 大类）。
 - ⏳ **等待用户确认**后再进入后续迭代（RBAC、多平台、Docker、档位 3 等均只入需求与文档）。
 
 ## 会话注意事项

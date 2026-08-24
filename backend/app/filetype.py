@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import io
 import mimetypes
 import re
 from pathlib import Path
@@ -390,3 +391,26 @@ def pdf_extract_page_images(path: Path) -> list[tuple[int, bytes, str]]:
 
 def mime_of(ext: str) -> str:
     return mimetypes.guess_type("x" + ext)[0] or "application/octet-stream"
+
+
+# 视觉供应商通用支持格式（MiMo/通义/OpenAI 等均支持；超出即 400 拒绝）
+_VISION_OK_FORMATS = {"JPEG", "PNG", "BMP", "WEBP", "GIF"}
+
+
+def normalize_image_for_vision(data: bytes, mime: str) -> tuple[bytes, str]:
+    """视觉模型图片标准化（0.1.37，CH-066）：Pillow 探测图片实际格式，不在供应商通用
+    支持范围（jpeg/png/bmp/webp/gif）的格式（如 PDF 内嵌 TIFF/JPEG2000/CCITT）统一
+    转码为 JPEG，消除"仅支持 jpg、bmp、webp、gif、png 格式"类 400。解码失败原样返回
+    （交由上游报错，不吞异常）。
+    """
+    from PIL import Image
+
+    try:
+        with Image.open(io.BytesIO(data)) as im:
+            if (im.format or "").upper() in _VISION_OK_FORMATS:
+                return data, mime  # 已支持，原样发送（避免无谓转码与体积膨胀）
+            buf = io.BytesIO()
+            im.convert("RGB").save(buf, format="JPEG", quality=90)
+            return buf.getvalue(), "image/jpeg"
+    except Exception:  # noqa: BLE001 无法解码（损坏/未知）→ 原样发送，由上游返回具体错误
+        return data, mime

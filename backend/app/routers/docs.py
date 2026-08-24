@@ -15,6 +15,10 @@ router = APIRouter(prefix="/api/docs", tags=["docs"])
 
 store = Store()
 
+# 文件大类（0.1.37，CH-065）：重试时可按大类手工兜底（识别问题纠正）
+RETRY_CATEGORIES = ("text", "office", "pdf_text", "pdf_image", "image")
+CATEGORY_LABELS = {"text": "文本", "office": "Office 文档", "pdf_text": "文字 PDF", "pdf_image": "图片 PDF（OCR）", "image": "图片"}
+
 
 def _doc_out(doc: dict) -> DocumentOut:
     return DocumentOut(**doc)
@@ -83,23 +87,54 @@ def delete_document(doc_id: int):
 @router.post("/{doc_id}/retry")
 def retry_document(doc_id: int, payload: Optional[dict] = Body(default=None)):
     """失败文档重新提交解析（0.1.34 CH-060；0.1.35 CH-062 原子条件 UPDATE；
-    0.1.36 CH-063 可选 body {ext} 手动指定文件类型后重试）。"""
+    0.1.36 CH-063 可选 ext 指定扩展名；0.1.37 CH-065 可选 category 指定文件大类兜底）。"""
     doc = store.get_document(doc_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="文档不存在或已被删除。")
     ext = None
-    if payload and payload.get("ext"):
-        ext = str(payload["ext"]).strip().lower()
-        if not ext.startswith("."):
-            ext = "." + ext
-        if ext not in config.ALLOWED_EXTS:
-            raise HTTPException(status_code=400, detail=f"不支持的文件类型：{ext}")
-    if not store.retry_document(doc_id, ext=ext, category=filetype.classify_ext(ext) if ext else None):
+    category = None
+    raw_ext = None
+    raw_cat = None
+    if payload:
+        raw_ext = payload.get("ext")
+        raw_cat = payload.get("category")
+        if raw_ext and raw_cat:
+            raise HTTPException(status_code=400, detail="ext 与 category 不可同时指定，请只传其一。")
+        if raw_ext:
+            # 指定具体扩展名（0.1.36）：白名单校验，分类由扩展名推导
+            ext = str(raw_ext).strip().lower()
+            if not ext.startswith("."):
+                ext = "." + ext
+            if ext not in config.ALLOWED_EXTS:
+                raise HTTPException(status_code=400, detail=f"不支持的文件类型：{ext}")
+            category = filetype.classify_ext(ext)
+        elif raw_cat:
+            # 指定文件大类（0.1.37）：识别问题手工兜底，扩展名按大类联动
+            category = str(raw_cat).strip().lower()
+            if category not in RETRY_CATEGORIES:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"不支持的文件大类：{raw_cat}（可选：{' / '.join(RETRY_CATEGORIES)}）",
+                )
+            if category in ("pdf_text", "pdf_image"):
+                ext = ".pdf"  # PDF 大类必须按 PDF 解析器走
+            elif category == "image":
+                ext = ".png"
+            elif category == "text":
+                ext = doc.get("ext") if doc.get("ext") in (".txt", ".md") else ".txt"
+            # office：保持原扩展名（Office 内部细分由扩展名决定，伪装场景仍可用 ext 指定）
+    if not store.retry_document(doc_id, ext=ext, category=category):
         raise HTTPException(status_code=400, detail="仅失败状态的文档可以重新解析。")
     from ..task_queue import enqueue
 
     enqueue(doc_id)
-    message = f"已重新提交解析：{doc['name']}" + (f"（按 {ext} 类型）" if ext else "")
+    # 提示按"用户指定的是什么"展示（大类联动出的 ext 不喧宾夺主）
+    if raw_cat:
+        message = f"已重新提交解析：{doc['name']}（按 {CATEGORY_LABELS[category]} 大类）"
+    elif raw_ext:
+        message = f"已重新提交解析：{doc['name']}（按 {ext} 类型）"
+    else:
+        message = f"已重新提交解析：{doc['name']}"
     return ok(None, message=message)
 
 

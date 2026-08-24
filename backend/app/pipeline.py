@@ -17,6 +17,8 @@ def _vision_describe(cfg: dict, raw: bytes, mime: str, fallback_prompt: str, slo
 
     item = AiItem(**cfg)
     prompt = (cfg.get("prompt") or "").strip() or fallback_prompt
+    # 0.1.37（CH-066）：非通用格式（TIFF/JPEG2000 等）统一转码 JPEG，消除供应商 400
+    raw, mime = filetype.normalize_image_for_vision(raw, mime)
     return llm.chat(
         item,
         [{"role": "user", "content": prompt}],

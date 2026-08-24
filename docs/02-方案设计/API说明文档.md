@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 |------|------|
 | 产品名称 | 兰台（lantai）本地 RAG 知识库 |
-| 文档版本 | V1.34（对应应用 0.1.36） |
+| 文档版本 | V1.35（对应应用 0.1.37） |
 | 生成时间 | 2026-08-23 |
 | 数据来源 | 技术对接方案.md、PRD产品需求文档.md（§6）、数据库设计文档.md |
 | 适用范围 | 前端调用与外部程序集成（API token） |
@@ -97,11 +97,18 @@ curl -F "file=@./兰台简介.txt" http://127.0.0.1:8000/api/docs/upload
 
 `DELETE /api/docs/{doc_id}` → 级联删除全部切片与源文件；成功返回 `{"code":0,"message":"已删除文档：<名称>","data":null}`。
 
-### 2.4b 失败文档重试（V1.32 新增；V1.34 补手动指定类型）
+### 2.4b 失败文档重试（V1.32 新增；V1.34 补手动指定类型；V1.35 补文件大类）
 
 `POST /api/docs/{doc_id}/retry` → 仅 `failed` 状态可重试：置 `queued` 重新入队解析；非失败返回 400 `仅失败状态的文档可以重新解析。`；不存在返回 404。0.1.35 起"校验+置 queued"合并为 store 层原子条件 UPDATE（`WHERE status='failed'`），并发重试不会双次入队。
 
-**0.1.36 手动指定文件类型（CH-063）**：可选 JSON body `{"ext": ".docx"}`——在 `ALLOWED_EXTS` 白名单内的扩展名（自动更新文档扩展名与分类，按新类型重新解析；伪装扩展名导致解析失败时使用）；不在白名单返回 400 `不支持的文件类型：<ext>`；不传 `ext` 则按原扩展名重试（行为不变）。示例：上传伪装 `.ppt` 实为 docx 的文件 → 解析失败 → `POST /api/docs/{id}/retry {"ext": ".docx"}` → 按 docx 解析成功。
+**可选 body（二选一，同时传返回 400 `ext 与 category 不可同时指定，请只传其一。`）**：
+
+| 字段 | 说明 | 示例 |
+|------|------|------|
+| `ext` | 指定具体扩展名（0.1.36，伪装扩展名纠正）：白名单内自动更新扩展名与分类后按新类型解析；白名单外 400 `不支持的文件类型：<ext>` | `{"ext":".docx"}` |
+| `category` | 指定文件大类（0.1.37，识别问题手工兜底）：枚举 `text / office / pdf_text / pdf_image / image`，非法值 400 `不支持的文件大类：<值>（可选：text / office / pdf_text / pdf_image / image）`；**大类联动扩展名**——pdf_text/pdf_image→`.pdf`、image→`.png`、text→`.txt`（已是 txt/md 保持）、office→保持原扩展名 | `{"category":"pdf_image"}` |
+
+不传 body → 按原类型重试（行为不变）。示例：扫描件被误判为文字 PDF → 解析失败 → `POST /api/docs/{id}/retry {"category":"pdf_image"}` → 按 OCR 通道重新解析。
 
 ### 2.5 预览源文件（文本）
 
@@ -314,7 +321,7 @@ data: {"type": "done"}
 ```json
 {
   "code": 0, "message": "ok",
-  "data": {"version": "0.1.36", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
+  "data": {"version": "0.1.37", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
 }
 ```
 
@@ -413,7 +420,7 @@ with httpx.Client(base_url="http://127.0.0.1:8000") as c:
 
 ---
 
-**文档状态**: API 说明 V1.34（与应用 0.1.36 同步）
+**文档状态**: API 说明 V1.35（与应用 0.1.37 同步）
 **生成时间**: 2026-08-23
 **前置文档**: 技术对接方案.md、PRD产品需求文档.md、数据库设计文档.md
 **变更规则**: 接口变更时本文件随版本同步更新（0.1.1 → 0.1.2 → …）
