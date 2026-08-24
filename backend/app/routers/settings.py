@@ -12,6 +12,7 @@ from fastapi import APIRouter, Cookie, HTTPException, Request, Response
 from .. import config, llm, security, store as store_mod
 from ..schemas import (
     AiConfigPut,
+    ParseConfig,
     PasswordChange,
     SystemInfo,
     TestRequest,
@@ -180,3 +181,23 @@ def list_vendors():
     from ..vendors import VENDORS
 
     return ok(VENDORS)
+
+
+@router.get("/parse")
+def get_parse(session: str | None = Cookie(default=None, alias="lantai_session")):
+    """解析队列配置与状态（0.1.18）：并发数 / 运行中 / 排队中。"""
+    _require_session(session)
+    from .. import task_queue
+
+    return ok(task_queue.stats())
+
+
+@router.put("/parse")
+def put_parse(body: ParseConfig, session: str | None = Cookie(default=None, alias="lantai_session")):
+    """调整解析并发数（1~50），即时生效。"""
+    _require_session(session)
+    from .. import task_queue
+
+    n = task_queue.set_concurrency(body.concurrency)
+    store.set_setting("parse_concurrency", str(n))
+    return ok(task_queue.stats(), message=f"解析并发数已调整为 {n}，立即生效。")

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from .. import config, filetype, pipeline, store as store_mod
@@ -20,7 +20,7 @@ def _doc_out(doc: dict) -> DocumentOut:
 
 
 @router.post("/upload")
-def upload_document(file: UploadFile = File(...), background: BackgroundTasks = BackgroundTasks()):
+def upload_document(file: UploadFile = File(...)):
     ext = Path(file.filename or "").suffix.lower()
     if ext not in config.ALLOWED_EXTS:
         raise HTTPException(
@@ -43,8 +43,12 @@ def upload_document(file: UploadFile = File(...), background: BackgroundTasks = 
     doc_dir.mkdir(parents=True, exist_ok=True)
     (doc_dir / name).write_bytes(data)
 
-    background.add_task(pipeline.process_document, doc_id)
-    return ok(_doc_out(store.get_document(doc_id)).model_dump(), message="上传成功，正在解析…")
+    # 0.1.18：入解析队列（并发受限），状态 queued → worker 置 parsing → ready/failed
+    from .. import task_queue
+
+    store.set_document_status(doc_id, "queued")
+    task_queue.enqueue(doc_id)
+    return ok(_doc_out(store.get_document(doc_id)).model_dump(), message="上传成功，已加入解析队列。")
 
 
 @router.get("")

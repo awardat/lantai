@@ -26,6 +26,13 @@ async def lifespan(app: FastAPI):
     config.ensure_dirs()
     _setup_file_logging()
     agent_log.setup_agent_logging()
+    from . import task_queue
+
+    # 0.1.18：恢复解析队列（重启前 queued/parsing 的文档重新入队）并启动 worker
+    recovered = task_queue.requeue_pending()
+    task_queue.ensure_workers()
+    if recovered:
+        logger.info("解析队列恢复 %s 个待解析文档", recovered)
     st = Store()
     # 首次启动初始化：默认配置密码 / 会话密钥 / 版本号
     if not st.get_setting("admin_password_hash"):

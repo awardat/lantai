@@ -164,6 +164,11 @@ class Store:
         rows = self._query("SELECT * FROM documents ORDER BY id DESC")
         return [dict(r) for r in rows]
 
+    def list_pending_ids(self) -> list[int]:
+        """排队/解析中的文档 ID（服务重启恢复解析队列用）。"""
+        rows = self._query("SELECT id FROM documents WHERE status IN ('queued','parsing')")
+        return [r["id"] for r in rows]
+
     def delete_document(self, doc_id: int) -> Optional[dict]:
         doc = self.get_document(doc_id)
         if doc is None:

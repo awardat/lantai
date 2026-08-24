@@ -94,29 +94,80 @@ document.querySelectorAll(".side-nav-btn").forEach((btn) => {
   });
 });
 
-/* ---------------- 文档管理 ---------------- */
-const fileInput = $("#file-input");
-$("#btn-upload").addEventListener("click", () => fileInput.click());
-fileInput.addEventListener("change", async () => {
-  const files = Array.from(fileInput.files || []);
-  if (!files.length) return;
-  const failed = [];
-  for (const f of files) {
-    if (f.size > 20 * 1024 * 1024) { failed.push(`${f.name}：超过 20MB 限制`); continue; }
-    const fd = new FormData();
-    fd.append("file", f);
-    try {
-      await api("/api/docs/upload", { method: "POST", body: fd });
-    } catch (e) {
-      failed.push(`${f.name}：${e.message}`);
+/* ---------------- 文档管理（0.1.18：批量上传浮层 + 解析队列） ---------------- */
+const uploadOverlay = $("#upload-overlay");
+
+function openUploadOverlay() {
+  uploadOverlay.classList.remove("hidden");
+  $("#upload-list").innerHTML = "";
+}
+$("#btn-close-upload").addEventListener("click", () => uploadOverlay.classList.add("hidden"));
+uploadOverlay.addEventListener("click", (e) => {
+  if (e.target === uploadOverlay) uploadOverlay.classList.add("hidden");
+});
+$("#btn-upload").addEventListener("click", openUploadOverlay);
+$("#btn-pick-files").addEventListener("click", () => $("#upload-file-input").click());
+
+// 拖拽上传
+const dropZone = $("#drop-zone");
+["dragenter", "dragover"].forEach((ev) =>
+  dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.add("dragover"); })
+);
+["dragleave", "drop"].forEach((ev) =>
+  dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.remove("dragover"); })
+);
+dropZone.addEventListener("drop", (e) => {
+  const files = Array.from(e.dataTransfer.files || []);
+  if (files.length) uploadFiles(files);
+});
+$("#upload-file-input").addEventListener("change", (e) => {
+  const files = Array.from(e.target.files || []);
+  e.target.value = "";
+  if (files.length) uploadFiles(files);
+});
+
+// 上传（前端小并发 3），列表实时显示状态
+async function uploadFiles(files) {
+  const list = $("#upload-list");
+  const rows = files.map((f) => {
+    const row = document.createElement("div");
+    row.className = "upload-item";
+    row.innerHTML = `<span class="up-name">${esc(f.name)}</span><span class="up-size">${fmtSize(f.size)}</span><span class="up-state">等待</span>`;
+    list.appendChild(row);
+    return { file: f, row, state: row.querySelector(".up-state") };
+  });
+  const results = { ok: 0, fail: 0 };
+  let idx = 0;
+  async function worker() {
+    while (idx < rows.length) {
+      const cur = rows[idx++];
+      if (cur.file.size > 20 * 1024 * 1024) {
+        cur.state.textContent = "超过 20MB";
+        cur.state.className = "up-state err";
+        results.fail++;
+        continue;
+      }
+      cur.state.textContent = "上传中…";
+      const fd = new FormData();
+      fd.append("file", cur.file);
+      try {
+        await api("/api/docs/upload", { method: "POST", body: fd });
+        cur.state.textContent = "已入队";
+        cur.state.className = "up-state ok";
+        results.ok++;
+      } catch (e) {
+        cur.state.textContent = "失败";
+        cur.state.className = "up-state err";
+        cur.row.title = e.message;
+        results.fail++;
+      }
     }
   }
-  fileInput.value = "";
-  if (failed.length) toast("部分文件上传失败：\n" + failed.join("\n"), "error");
-  else toast("上传成功，正在解析…", "success");
-  await loadDocs();
+  await Promise.all([worker(), worker(), worker()]);
+  toast(`上传完成：成功 ${results.ok} 个${results.fail ? `，失败 ${results.fail} 个` : ""}，已加入解析队列。`, results.fail ? "error" : "success");
+  loadDocs();
   startPolling();
-});
+}
 
 let pollTimer = null;
 function startPolling() {
@@ -125,7 +176,8 @@ function startPolling() {
     const docs = await api("/api/docs").catch(() => null);
     if (!docs) return;
     renderDocs(docs);
-    if (!docs.some((d) => d.status === "parsing")) {
+    refreshParseStatus();
+    if (!docs.some((d) => d.status === "parsing" || d.status === "queued")) {
       clearInterval(pollTimer);
       pollTimer = null;
     }
@@ -135,7 +187,44 @@ function startPolling() {
 async function loadDocs() {
   const docs = await api("/api/docs");
   renderDocs(docs);
-  if (docs.some((d) => d.status === "parsing")) startPolling();
+  if (docs.some((d) => d.status === "parsing" || d.status === "queued")) startPolling();
+}
+
+/* ---- 解析队列设置（0.1.18） ---- */
+async function refreshParseStatus() {
+  try {
+    const s = await api("/api/settings/parse");
+    const el = $("#parse-status");
+    if (el) el.textContent = `运行中 ${s.parsing} 个 · 排队中 ${s.queued} 个 · 并发上限 ${s.concurrency}`;
+    return s;
+  } catch (e) {
+    return null;
+  }
+}
+
+$("#parse-concurrency").addEventListener("blur", async () => {
+  const input = $("#parse-concurrency");
+  const n = parseInt(input.value, 10);
+  if (!Number.isFinite(n) || n < 1 || n > 50) {
+    toast("并发数需在 1~50 之间。", "error");
+    const s = await refreshParseStatus();
+    if (s) input.value = s.concurrency;
+    return;
+  }
+  try {
+    const s = await api("/api/settings/parse", { method: "PUT", body: { concurrency: n } });
+    input.value = s.concurrency;
+    const el = $("#parse-status");
+    if (el) el.textContent = `运行中 ${s.parsing} 个 · 排队中 ${s.queued} 个 · 并发上限 ${s.concurrency}`;
+    toast(`解析并发数已调整为 ${s.concurrency}。`, "success");
+  } catch (e) {
+    toast(e.message, "error");
+  }
+});
+
+async function loadParseTab() {
+  const s = await refreshParseStatus();
+  if (s) $("#parse-concurrency").value = s.concurrency;
 }
 
 function renderDocs(docs) {
@@ -145,8 +234,8 @@ function renderDocs(docs) {
     return;
   }
   tbody.innerHTML = docs.map((d) => {
-    const stateCls = d.status === "ready" ? "ready" : d.status === "failed" ? "failed" : "parsing";
-    const stateText = d.status === "ready" ? "已就绪" : d.status === "failed" ? "失败" : "解析中…";
+    const stateMap = { ready: ["ready", "已就绪"], failed: ["failed", "失败"], queued: ["queued", "排队中"], parsing: ["parsing", "解析中…"] };
+    const [stateCls, stateText] = stateMap[d.status] || ["parsing", d.status];
     const errorTip = d.error ? ` title="${esc(d.error)}"` : "";
     return `<tr>
       <td>${esc(d.name)}</td>
@@ -419,6 +508,7 @@ function showSettingsBody() {
   $("#settings-gate").classList.add("hidden");
   $("#settings-body").classList.remove("hidden");
   loadAiConfig();
+  loadParseTab();
   loadTokens();
   loadAbout();
 }

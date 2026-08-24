@@ -83,6 +83,10 @@ class VerifyRequest(BaseModel):
     password: str
 
 
+class ParseConfig(BaseModel):
+    concurrency: int = Field(10, ge=1, le=50)  # 解析并发数（0.1.18）
+
+
 class TokenCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=64)
 

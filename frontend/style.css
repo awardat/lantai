@@ -156,6 +156,30 @@ button.primary:disabled { background: #c9b8a8; cursor: not-allowed; }
 .state.parsing { background: #e8f0fa; color: #2b5d9e; }
 .state.ready { background: #e6f4ea; color: var(--ok); }
 .state.failed { background: #fdecea; color: var(--danger); }
+.state.queued { background: #fdf3e0; color: var(--warn); }
+
+/* 批量上传浮层（0.1.18） */
+.upload-panel { width: min(560px, 94vw); height: auto; max-height: 84vh; }
+.upload-body { padding: 16px 20px; overflow-y: auto; }
+.drop-zone {
+  border: 2px dashed var(--line); border-radius: 12px; text-align: center;
+  padding: 26px 16px; cursor: pointer; transition: all .15s;
+}
+.drop-zone.dragover { border-color: var(--brand); background: #faf3ee; }
+.drop-icon { font-size: 26px; color: var(--brand-2); }
+.drop-zone p { margin: 6px 0; }
+.upload-list { margin-top: 12px; display: flex; flex-direction: column; gap: 4px; max-height: 300px; overflow-y: auto; }
+.upload-item {
+  display: flex; align-items: center; gap: 10px; padding: 6px 10px;
+  border: 1px solid var(--line); border-radius: 8px; font-size: 13px;
+}
+.up-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.up-size { color: var(--ink-2); font-size: 12px; }
+.up-state { font-size: 12px; }
+.up-state.ok { color: var(--ok); }
+.up-state.err { color: var(--danger); }
+
+.parse-status { color: var(--accent); font-size: 12px; margin-bottom: 10px; }
 .mini-btn {
   border: 1px solid var(--line); background: var(--panel); color: var(--brand);
   border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer;
