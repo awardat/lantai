@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Body, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from .. import config, filetype, pipeline, store as store_mod
@@ -80,18 +81,26 @@ def delete_document(doc_id: int):
 
 
 @router.post("/{doc_id}/retry")
-def retry_document(doc_id: int):
-    """失败文档重新提交解析（0.1.34 CH-060；0.1.35 CH-062 起"校验+置 queued"合并为
-    store 层原子条件 UPDATE，并发重试不会双次入队）。"""
+def retry_document(doc_id: int, payload: Optional[dict] = Body(default=None)):
+    """失败文档重新提交解析（0.1.34 CH-060；0.1.35 CH-062 原子条件 UPDATE；
+    0.1.36 CH-063 可选 body {ext} 手动指定文件类型后重试）。"""
     doc = store.get_document(doc_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="文档不存在或已被删除。")
-    if not store.retry_document(doc_id):
+    ext = None
+    if payload and payload.get("ext"):
+        ext = str(payload["ext"]).strip().lower()
+        if not ext.startswith("."):
+            ext = "." + ext
+        if ext not in config.ALLOWED_EXTS:
+            raise HTTPException(status_code=400, detail=f"不支持的文件类型：{ext}")
+    if not store.retry_document(doc_id, ext=ext, category=filetype.classify_ext(ext) if ext else None):
         raise HTTPException(status_code=400, detail="仅失败状态的文档可以重新解析。")
     from ..task_queue import enqueue
 
     enqueue(doc_id)
-    return ok(None, message=f"已重新提交解析：{doc['name']}")
+    message = f"已重新提交解析：{doc['name']}" + (f"（按 {ext} 类型）" if ext else "")
+    return ok(None, message=message)
 
 
 @router.get("/{doc_id}/preview")

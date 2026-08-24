@@ -198,6 +198,13 @@ button.primary:disabled { background: #c9b8a8; cursor: not-allowed; }
 .mini-btn:hover { border-color: var(--brand); background: #faf3ee; }
 .mini-btn.danger { color: var(--danger); }
 .mini-btn.danger:hover { border-color: var(--danger); background: #fdf1ef; }
+/* 失败重试类型下拉（0.1.36，CH-063）：与 mini-btn 同风格 */
+.retry-type {
+  border: 1px solid var(--line); background: var(--panel); color: var(--text, #333);
+  border-radius: 6px; padding: 3px 4px; font-size: 12px; cursor: pointer;
+  max-width: 96px;
+}
+.retry-type:hover { border-color: var(--brand); }
 
 /* ---------------- 浮层 ---------------- */
 .overlay {

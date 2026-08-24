@@ -246,6 +246,10 @@ async function loadParseTab() {
   if (s) $("#parse-concurrency").value = s.concurrency;
 }
 
+// 手动指定文件类型重试选项（0.1.36，CH-063）：与后端 ALLOWED_EXTS 保持一致（后端校验兜底）
+const RETRY_EXTS = [".txt", ".md", ".pdf", ".docx", ".doc", ".wps", ".xls", ".xlsx", ".ppt", ".pptx", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"];
+const retryExtOptions = '<option value="">按原类型</option>' + RETRY_EXTS.map((e) => `<option value="${e}">${e}</option>`).join("");
+
 function renderDocs(docs) {
   const tbody = $("#doc-tbody");
   // 状态筛选（0.1.34，CH-060）：按当前筛选状态过滤后渲染
@@ -259,8 +263,9 @@ function renderDocs(docs) {
     const [stateCls, stateText] = stateMap[d.status] || ["parsing", d.status];
     // 失败原因悬停提示：escAttr 转义引号，避免 error 含 " 破坏 title 属性（CH-060/M1）
     const errorTip = d.error ? ` title="${escAttr(d.error)}"` : "";
-    const retryBtn = d.status === "failed"
-      ? `<button class="mini-btn" onclick="retryDoc(${d.id})">重试</button>` : "";
+    // 失败行：类型下拉（指定后重试按该类型解析）+ 重试按钮（0.1.34/0.1.36）
+    const retryBox = d.status === "failed" ? `<select class="retry-type" data-id="${d.id}" title="选择文件真实类型后点「重试」，将按指定类型重新解析（伪装扩展名导致失败时使用）">${retryExtOptions}</select>
+        <button class="mini-btn" onclick="retryDoc(${d.id})">重试</button>` : "";
     return `<tr>
       <td>${esc(d.name)}</td>
       <td>${esc(CATEGORY_LABELS[d.category] || d.category)}</td>
@@ -270,17 +275,20 @@ function renderDocs(docs) {
       <td>${esc(d.created_at)}</td>
       <td>
         <button class="mini-btn" onclick="openPreview(${d.id})">预览</button>
-        ${retryBtn}
+        ${retryBox}
         <button class="mini-btn danger" onclick="deleteDoc(${d.id}, '${esc(d.name).replace(/'/g, "\\'")}')">删除</button>
       </td>
     </tr>`;
   }).join("");
 }
 
-// 失败文档重新提交解析（0.1.34，CH-060）
+// 失败文档重新提交解析（0.1.34，CH-060；0.1.36 支持携带手动指定类型 ext）
 async function retryDoc(id) {
+  const sel = document.querySelector(`.retry-type[data-id="${id}"]`);
+  const body = {};
+  if (sel && sel.value) body.ext = sel.value;
   try {
-    const r = await api(`/api/docs/${id}/retry`, { method: "POST" });
+    const r = await api(`/api/docs/${id}/retry`, { method: "POST", body });
     toast(r && r.message ? r.message : "已重新提交解析。", "success");
   } catch (e) {
     toast(e.message, "error");

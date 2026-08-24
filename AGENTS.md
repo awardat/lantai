@@ -141,6 +141,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - ✅ 已执行：0.1.33（用户提出后实施，CH-059）：**供应商新增小米 MiMo**——官方 OpenAI 兼容端点 `https://api.xiaomimimo.com/v1`、推荐 `mimo-v2.5-pro`（chat/vision，1M 上下文）、无 embedding（提示替代）；README 同步。
 - ✅ 已执行：0.1.34（用户提出后实施，CH-060）：**文档清单状态筛选（全部/已就绪/排队中/解析中/失败）+ 失败原因悬停（escAttr 转义）+ 失败重试**（`POST /api/docs/{id}/retry` + 失败行重试按钮）；实测重试链路通过。
 - ✅ 已执行：0.1.35（用户确认 Ox-v0.1.34 评审整改，CH-062）：L1 上传 415 文案由 `ALLOWED_EXTS` 动态生成（补 6 种 office 扩展名）；L4 retry"校验+置 queued"合并 store 层原子条件 UPDATE（并发重试不双入队）；D1~D3 文档同步（技术对接方案 §6.1/测试方案 TC-125~127/README 功能一览）；L2/L3（Cargo.lock、requirements 注释头）按 CH-061 规则不计评审项，随版本同步义务刷新；流程固化：**文档同步须在等待提交前完成**（CH-062）。
+- ✅ 已执行：0.1.36（用户提出后实施，CH-063）：**失败文件手动指定文件类型重试**——失败行新增类型下拉（按原类型 + 全白名单扩展名），`POST /api/docs/{id}/retry` 可选 body `{"ext":".docx"}`（白名单校验、自动更新 ext/category 后按新类型重新解析；不传行为不变）；实测伪装 .ppt（实为 docx）→ 指定 .docx → 解析成功。
 - ⏳ **等待用户确认**后再进入后续迭代（RBAC、多平台、Docker、档位 3 等均只入需求与文档）。
 
 ## 会话注意事项
