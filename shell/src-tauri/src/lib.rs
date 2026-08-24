@@ -69,6 +69,9 @@ pub fn run() {
             .title("兰台")
             .inner_size(1280.0, 738.0)
             .min_inner_size(720.0, 540.0)
+            // 启用 OS 文件拖放（CH-050）：wry/WebView2 默认禁用 drag and drop，
+            // 不开启则拖文件进页面无任何事件（拖放上传失效；CDP 模拟验证前端逻辑正常）
+            .drag_and_drop(true)
             // 窗口底色与启动画面一致（深色）：页面首帧渲染前不显示白屏
             .background_color(tauri::window::Color(13, 17, 23, 255));
             if std::env::var("DSH_DEBUG_DEVTOOLS").is_ok() {
