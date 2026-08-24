@@ -72,6 +72,11 @@ pub fn run() {
             // 启用 OS 文件拖放（CH-050）：wry/WebView2 默认禁用 drag and drop，
             // 不开启则拖文件进页面无任何事件（拖放上传失效；CDP 模拟验证前端逻辑正常）
             .drag_and_drop(true)
+            // CH-052（拖放修复续）：必须禁用 wry 内置 drag drop handler 才能让
+            // HTML5 拖放到达页面——wry 注册 handler 时会 SetAllowExternalDrop(false)
+            // 并自建 OLE IDropTarget 接管，文件路径只回调 Rust 侧，页面 drop 事件永远收不到。
+            // tauri 官方注释：Windows 前端使用 HTML5 拖放 API 必须禁用该 handler。
+            .disable_drag_drop_handler()
             // 窗口底色与启动画面一致（深色）：页面首帧渲染前不显示白屏
             .background_color(tauri::window::Color(13, 17, 23, 255));
             if std::env::var("DSH_DEBUG_DEVTOOLS").is_ok() {
