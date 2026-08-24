@@ -52,6 +52,7 @@ Copy-Item (Join-Path $root "shell\src-tauri\target\release\lantai-shell.exe") $d
 Copy-Item (Join-Path $root "shell\src-tauri\target\release\WebView2Loader.dll") $dst
 New-Item -ItemType File -Path (Join-Path $dst "portable.marker") -Force | Out-Null
 Copy-Item "$svcOut\*" $dst -Recurse -Force
+Copy-Item (Join-Path $root "LICENSE") $dst -Force   # MIT 许可证随发布物分发
 
 # 6. 清理中间产物（单轨：不留服务版目录）
 Write-Host "[3/6] 清理中间产物..."

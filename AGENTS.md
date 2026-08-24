@@ -123,6 +123,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - ✅ 已执行：0.1.22（用户确认整改方案后实施，CH-042）：**v0.1.21 评审整改**——H1 字节切片 panic / H2 keep-alive 端口竞态（高危）；S-M1~S-M7（前台代理、设置透传、失败扫描仅 Boot、白名单收窄 8000、stop 重试、iframe url 更新、下载文件名净化）；文档 M3~M5、L1~L6；**单轨发布首版**。
 - ✅ 已执行：0.1.23（用户提出后实施，CH-043）：**终端标题栏版本标识**——「兰台终端 · vX.X.X」来自 Rust `CARGO_PKG_VERSION`（编译期常量），经 state 下发前端渲染，升版自动同步。
 - ✅ 已登记：**开发过程单轨化（CH-044）**：release 下不保留服务版目录（0.1.22/0.1.23 中间产物已清理）；发布固化为一键脚本 `scripts/build_release.ps1`（PyInstaller → 组装 → 清理 → zip → 发行物校验）。
+- ✅ 已执行：0.1.24（用户提出后实施，CH-045）：**README 首次使用引导完善 + MIT 许可证**——「首次使用三步」补智能体配置明细（7 组模型用途/默认值/必须项）；新增 LICENSE（MIT，开放不限制），发布物随附；项目已推送 GitHub（https://github.com/awardat/lantai，公开，main 分支）。
 - ⏳ **等待用户确认**后再进入后续迭代（RBAC、多平台、Docker、档位 3 等均只入需求与文档）。
 
 ## 会话注意事项
