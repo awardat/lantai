@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 |------|------|
 | 产品名称 | 兰台（lantai）本地 RAG 知识库 |
-| 文档版本 | V1.22（对应应用 0.1.24） |
+| 文档版本 | V1.23（对应应用 0.1.25） |
 | 生成时间 | 2026-08-23 |
 | 数据来源 | 技术对接方案.md、PRD产品需求文档.md（§6）、数据库设计文档.md |
 | 适用范围 | 前端调用与外部程序集成（API token） |
@@ -32,7 +32,7 @@
 | 方式 | 适用接口 | 说明 |
 |------|----------|------|
 | 免登录 | 业务接口（文档、问答、检索、系统信息） | 单用户演示模式 |
-| 会话 Cookie | 配置接口 | `POST /api/settings/verify` 校验密码后发放 `lantai_session`（HTTP-only，24h） |
+| 会话（**双通道，0.1.25**） | 配置接口 | `POST /api/settings/verify` 校验密码后：① 响应体返回 `data.session`（明文仅此一次）+ ② 设置 `lantai_session` Cookie（HTTP-only，24h，浏览器直开用）。**调用方任选其一**：`X-Lantai-Session: <token>` 请求头（桌面壳 iframe 场景，localStorage 存储）或 Cookie（浏览器直开） |
 | Bearer token | `POST /api/chat`（外部调用） | `Authorization: Bearer <token>`，token 在设置页生成；无效/已吊销返回 401 |
 
 ### 1.4 错误码速查
@@ -224,7 +224,7 @@ data: {"type": "done"}
 
 `POST /api/settings/verify`，body `{"password": "Admin#123"}`
 
-- 成功：`{"code":0,"message":"验证通过.","data":null}`，响应头 `Set-Cookie: lantai_session=…; HttpOnly; SameSite=lax`；
+- 成功：`{"code":0,"message":"验证通过.","data":{"session":"<token>"}}`，响应头 `Set-Cookie: lantai_session=…; HttpOnly; SameSite=lax`（**双通道**：`data.session` 供桌面壳等跨站 iframe 场景经 `X-Lantai-Session` 请求头传递；Cookie 供浏览器直开）；
 - 密码错误：401 `配置密码错误。`；连续 5 次错误：429 `尝试次数过多，请 1 分钟后再试。`
 
 ### 4.2 读取 AI 配置
@@ -307,7 +307,7 @@ data: {"type": "done"}
 ```json
 {
   "code": 0, "message": "ok",
-  "data": {"version": "0.1.24", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
+  "data": {"version": "0.1.25", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
 }
 ```
 
@@ -406,7 +406,7 @@ with httpx.Client(base_url="http://127.0.0.1:8000") as c:
 
 ---
 
-**文档状态**: API 说明 V1.22（与应用 0.1.24 同步）
+**文档状态**: API 说明 V1.23（与应用 0.1.25 同步）
 **生成时间**: 2026-08-23
 **前置文档**: 技术对接方案.md、PRD产品需求文档.md、数据库设计文档.md
 **变更规则**: 接口变更时本文件随版本同步更新（0.1.1 → 0.1.2 → …）

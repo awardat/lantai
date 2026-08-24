@@ -8,6 +8,10 @@ const $ = (sel) => document.querySelector(sel);
 
 async function api(path, options = {}) {
   const opts = { headers: {}, ...options };
+  // 双通道会话（0.1.25，CH-046）：壳内 iframe 跨站上下文 cookie 不可用，
+  // 经 X-Lantai-Session 头传递（localStorage 存储）；浏览器直开时 cookie 通道仍可用
+  const sess = localStorage.getItem("lantai_session");
+  if (sess) opts.headers["X-Lantai-Session"] = sess;
   if (opts.body && !(opts.body instanceof FormData)) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(opts.body);
@@ -18,6 +22,10 @@ async function api(path, options = {}) {
   } catch (e) {
     toast("网络错误：无法连接后端服务，请确认服务已启动。", "error");
     throw e;
+  }
+  if (resp.status === 401) {
+    // 会话失效：清除本地会话，由调用方决定是否回登录框
+    localStorage.removeItem("lantai_session");
   }
   let payload = null;
   try { payload = await resp.json(); } catch (e) { /* ignore */ }
@@ -517,7 +525,9 @@ $("#btn-settings-verify").addEventListener("click", async () => {
   const pw = $("#settings-password-input").value;
   if (!pw) { toast("请输入配置密码。", "error"); return; }
   try {
-    await api("/api/settings/verify", { method: "POST", body: { password: pw } });
+    const data = await api("/api/settings/verify", { method: "POST", body: { password: pw } });
+    // 双通道会话：保存会话 token（壳内 iframe 场景 cookie 不可用，改走请求头）
+    if (data && data.session) localStorage.setItem("lantai_session", data.session);
     toast("验证通过。", "success");
     showSettingsBody();
   } catch (e) {

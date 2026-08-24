@@ -124,6 +124,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - ✅ 已执行：0.1.23（用户提出后实施，CH-043）：**终端标题栏版本标识**——「兰台终端 · vX.X.X」来自 Rust `CARGO_PKG_VERSION`（编译期常量），经 state 下发前端渲染，升版自动同步。
 - ✅ 已登记：**开发过程单轨化（CH-044）**：release 下不保留服务版目录（0.1.22/0.1.23 中间产物已清理）；发布固化为一键脚本 `scripts/build_release.ps1`（PyInstaller → 组装 → 清理 → zip → 发行物校验）。
 - ✅ 已执行：0.1.24（用户提出后实施，CH-045）：**README 首次使用引导完善 + MIT 许可证**——「首次使用三步」补智能体配置明细（7 组模型用途/默认值/必须项）；新增 LICENSE（MIT，开放不限制），发布物随附；项目已推送 GitHub（https://github.com/awardat/lantai，公开，main 分支）。
+- ✅ 已执行：0.1.25（用户报告后修复，CH-046）：**壳内会话 cookie 丢失**——壳 iframe 跨站上下文 SameSite=Lax cookie 被 WebView2 拒绝；修复：**双通道会话**（verify 返回 session token + localStorage + `X-Lantai-Session` 请求头；后端 header 优先、cookie 兼容）；CDP 实测壳内登录全链路通过。
 - ⏳ **等待用户确认**后再进入后续迭代（RBAC、多平台、Docker、档位 3 等均只入需求与文档）。
 
 ## 会话注意事项

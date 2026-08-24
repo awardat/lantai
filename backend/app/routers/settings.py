@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import hashlib
 
-from fastapi import APIRouter, Cookie, HTTPException, Request, Response
+from fastapi import APIRouter, Cookie, Header, HTTPException, Request, Response
 
 from .. import config, llm, security, store as store_mod
 from ..schemas import (
@@ -30,8 +30,11 @@ store = Store()
 SESSION_COOKIE = "lantai_session"
 
 
-def _require_session(session: str | None) -> None:
-    if not security.validate_session(session):
+def _require_session(session: str | None, header_session: str | None = None) -> None:
+    # 双通道会话（0.1.25，CH-046）：壳内 iframe 与顶层 tauri.localhost 跨站，
+    # SameSite=Lax 会话 cookie 在第三方上下文被 WebView2 拒绝存储；
+    # 前端改经 X-Lantai-Session 请求头传递（localStorage），浏览器直开仍走 cookie。
+    if not security.validate_session(header_session or session):
         raise HTTPException(status_code=401, detail="未验证的配置会话，请先输入配置密码。")
 
 
@@ -64,18 +67,20 @@ def verify(body: VerifyRequest, response: Response):
         httponly=True,
         samesite="lax",
     )
-    return ok(None, message="验证通过。")
+    return ok({"session": token}, message="验证通过。")
 
 
 @router.get("/ai")
-def get_ai(session: str | None = Cookie(default=None, alias="lantai_session")):
-    _require_session(session)
+def get_ai(session: str | None = Cookie(default=None, alias="lantai_session"),
+        x_session: str | None = Header(default=None, alias="X-Lantai-Session")):
+    _require_session(session, x_session)
     return ok(_masked_config())
 
 
 @router.put("/ai")
-def put_ai(body: AiConfigPut, session: str | None = Cookie(default=None, alias="lantai_session")):
-    _require_session(session)
+def put_ai(body: AiConfigPut, session: str | None = Cookie(default=None, alias="lantai_session"),
+        x_session: str | None = Header(default=None, alias="X-Lantai-Session")):
+    _require_session(session, x_session)
     current = store.get_ai_config()
     incoming = {k: v.model_dump() for k, v in body.items.items()}
     for key, item in incoming.items():
@@ -107,8 +112,9 @@ def put_ai(body: AiConfigPut, session: str | None = Cookie(default=None, alias="
 
 
 @router.post("/ai/test")
-def test_ai(body: TestRequest, session: str | None = Cookie(default=None, alias="lantai_session")):
-    _require_session(session)
+def test_ai(body: TestRequest, session: str | None = Cookie(default=None, alias="lantai_session"),
+        x_session: str | None = Header(default=None, alias="X-Lantai-Session")):
+    _require_session(session, x_session)
     cfg = body.config.model_dump()
     item = dict(cfg)
     if (item.get("api_key") or "").startswith("****"):
@@ -125,8 +131,9 @@ def test_ai(body: TestRequest, session: str | None = Cookie(default=None, alias=
 
 
 @router.post("/password")
-def change_password(body: PasswordChange, session: str | None = Cookie(default=None, alias="lantai_session")):
-    _require_session(session)
+def change_password(body: PasswordChange, session: str | None = Cookie(default=None, alias="lantai_session"),
+        x_session: str | None = Header(default=None, alias="X-Lantai-Session")):
+    _require_session(session, x_session)
     stored = store.get_setting("admin_password_hash", "")
     if not stored or not security.verify_password(body.old_password, stored):
         raise HTTPException(status_code=401, detail="旧密码不正确。")
@@ -138,14 +145,16 @@ def change_password(body: PasswordChange, session: str | None = Cookie(default=N
 
 
 @router.get("/tokens")
-def list_tokens(session: str | None = Cookie(default=None, alias="lantai_session")):
-    _require_session(session)
+def list_tokens(session: str | None = Cookie(default=None, alias="lantai_session"),
+        x_session: str | None = Header(default=None, alias="X-Lantai-Session")):
+    _require_session(session, x_session)
     return ok([TokenOut(**t).model_dump() for t in store.list_api_tokens()])
 
 
 @router.post("/tokens")
-def create_token(body: TokenCreate, session: str | None = Cookie(default=None, alias="lantai_session")):
-    _require_session(session)
+def create_token(body: TokenCreate, session: str | None = Cookie(default=None, alias="lantai_session"),
+        x_session: str | None = Header(default=None, alias="X-Lantai-Session")):
+    _require_session(session, x_session)
     plain = security.generate_api_token()
     tid = store.create_api_token(body.name, plain)
     row = next(t for t in store.list_api_tokens() if t["id"] == tid)
@@ -154,8 +163,9 @@ def create_token(body: TokenCreate, session: str | None = Cookie(default=None, a
 
 
 @router.delete("/tokens/{token_id}")
-def revoke_token(token_id: int, session: str | None = Cookie(default=None, alias="lantai_session")):
-    _require_session(session)
+def revoke_token(token_id: int, session: str | None = Cookie(default=None, alias="lantai_session"),
+        x_session: str | None = Header(default=None, alias="X-Lantai-Session")):
+    _require_session(session, x_session)
     if not store.revoke_api_token(token_id):
         raise HTTPException(status_code=404, detail="Token 不存在或已吊销。")
     return ok(None, message="Token 已吊销，立即失效。")
@@ -184,18 +194,20 @@ def list_vendors():
 
 
 @router.get("/parse")
-def get_parse(session: str | None = Cookie(default=None, alias="lantai_session")):
+def get_parse(session: str | None = Cookie(default=None, alias="lantai_session"),
+        x_session: str | None = Header(default=None, alias="X-Lantai-Session")):
     """解析队列配置与状态（0.1.18）：并发数 / 运行中 / 排队中。"""
-    _require_session(session)
+    _require_session(session, x_session)
     from .. import task_queue
 
     return ok(task_queue.stats())
 
 
 @router.put("/parse")
-def put_parse(body: ParseConfig, session: str | None = Cookie(default=None, alias="lantai_session")):
+def put_parse(body: ParseConfig, session: str | None = Cookie(default=None, alias="lantai_session"),
+        x_session: str | None = Header(default=None, alias="X-Lantai-Session")):
     """调整解析并发数（1~50），即时生效。"""
-    _require_session(session)
+    _require_session(session, x_session)
     from .. import task_queue
 
     n = task_queue.set_concurrency(body.concurrency)
