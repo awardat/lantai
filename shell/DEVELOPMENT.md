@@ -33,19 +33,20 @@ cargo build --release
 
 ## 构建绿色便携目录（发布）
 
+**统一走一键脚本**（单轨，0.1.22 起，CH-041/CH-044）：
+
 ```powershell
-# 1. 前端 + Rust（见上）
-# 2. 组装 release/lantai-shell-<版本>-windows-x64/（发布单轨，0.1.22 起）
-#    - lantai-shell.exe（壳）
-#    - WebView2Loader.dll（target/release/ 下，webview2-com-sys 构建时生成）
-#    - portable.marker（空文件，便携模式标记）
-#    - 兰台服务 one-dir 全部内容（lantai.exe + _internal/ + frontend/ 等，PyInstaller 打包）
-#    - 注意：目录与 zip 不得包含 data/（首次启动自动创建）
-# 3. 压缩 zip
+# 前置：前端（npm run build:ui）+ 壳（cargo build --release，见上）
+pwsh C:\code\lantai\scripts\build_release.ps1 -Version 0.1.x
+# 流程：PyInstaller（临时目录）→ 布局修正 → 组装 lantai-shell-<版本>-windows-x64/
+#      → 清理中间产物（release 下不留服务版目录）→ zip → 发行物校验
+#      （无 data/、无 settings.json、无服务版目录残留）
 ```
 
+壳目录结构：`lantai-shell.exe` + `WebView2Loader.dll`（target/release/ 下，webview2-com-sys 构建时生成）+ `portable.marker` + 兰台服务 one-dir 全部内容（lantai.exe + _internal/ + frontend/ 等，PyInstaller 打包）。
+
 > 壳与兰台服务同版本号（0.1.x）：壳目录内嵌同版本服务 one-dir，双击 lantai-shell.exe 即单机应用。
-> **单轨发布（CH-041）**：服务版目录/zip 不再单独发布（历史双轨保留可回滚）；壳目录内 lantai.exe 兼作调试/直跑入口。
+> **单轨发布（CH-041/CH-044）**：服务版目录/zip 不再单独发布，**release 下不留服务版中间产物**（历史双轨保留可回滚）；壳目录内 lantai.exe 兼作调试/直跑入口。
 
 ## 打包相关坑（沿用 dsh-ui 经验）
 

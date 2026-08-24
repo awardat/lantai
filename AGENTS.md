@@ -43,7 +43,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 ## 版本与发布（硬性约束）
 
 - **首个版本号 `0.1.1`**；**每次变更第三段 +1**（0.1.1 → 0.1.2 → 0.1.3 …），版本号同步更新于代码、README 与相关文档。
-- **不建立 setup 安装包**；**发布单轨（0.1.22 起，CH-041）**：只发布 `release/lantai-shell-0.1.x-windows-x64/` 绿色便携目录（壳 exe + WebView2Loader.dll + portable.marker + 兰台服务 one-dir 内容，可整体拷贝运行），随附 zip；**不再单独发布** `lantai-0.1.x-windows-x64/` 服务版目录/zip（历史双轨版本 0.1.1~0.1.21 保留可回滚）；壳与兰台同版本号体系（第三段 +1）。
+- **不建立 setup 安装包**；**发布单轨（0.1.22 起，CH-041/CH-044）**：只发布 `release/lantai-shell-0.1.x-windows-x64/` 绿色便携目录（壳 exe + WebView2Loader.dll + portable.marker + 兰台服务 one-dir 内容，可整体拷贝运行），随附 zip；**不再单独发布** `lantai-0.1.x-windows-x64/` 服务版目录/zip，**开发过程同样单轨**：服务 one-dir 为构建中间产物，**release 下不留服务版目录**（发布统一走 `scripts/build_release.ps1` 一键流程：PyInstaller → 组装 → 清理中间产物 → zip → 发行物校验）；历史双轨版本 0.1.1~0.1.21 保留可回滚；壳与兰台同版本号体系（第三段 +1）。
 - **壳目录内 `lantai.exe` 与 `--server` 模式保留**：壳拉起服务依赖；同时兼作调试/直跑入口（运行说明保留其用法）。
 - **发行版不得包含测试数据（硬性）**：release 目录与 zip **一律不含 data/**（rag.db、uploads/、logs/ 均不打包；首次启动自动创建）；发布前核对发行物清单（教训：0.1.19 壳 zip 误含自测空库与日志，用户解压后误判"数据库被重置"，CH-039）。
 
@@ -122,6 +122,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - ✅ 已登记：**发布单轨决策（CH-041/R121）**：0.1.22 起只发布 lantai-shell（壳 + 服务一体），不再单独发布服务版目录/zip；壳目录内 lantai.exe 与 `--server` 保留（壳依赖 + 调试直跑入口）；历史双轨（0.1.1~0.1.21）保留可回滚。
 - ✅ 已执行：0.1.22（用户确认整改方案后实施，CH-042）：**v0.1.21 评审整改**——H1 字节切片 panic / H2 keep-alive 端口竞态（高危）；S-M1~S-M7（前台代理、设置透传、失败扫描仅 Boot、白名单收窄 8000、stop 重试、iframe url 更新、下载文件名净化）；文档 M3~M5、L1~L6；**单轨发布首版**。
 - ✅ 已执行：0.1.23（用户提出后实施，CH-043）：**终端标题栏版本标识**——「兰台终端 · vX.X.X」来自 Rust `CARGO_PKG_VERSION`（编译期常量），经 state 下发前端渲染，升版自动同步。
+- ✅ 已登记：**开发过程单轨化（CH-044）**：release 下不保留服务版目录（0.1.22/0.1.23 中间产物已清理）；发布固化为一键脚本 `scripts/build_release.ps1`（PyInstaller → 组装 → 清理 → zip → 发行物校验）。
 - ⏳ **等待用户确认**后再进入后续迭代（RBAC、多平台、Docker、档位 3 等均只入需求与文档）。
 
 ## 会话注意事项
