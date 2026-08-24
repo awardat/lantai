@@ -35,16 +35,17 @@ cargo build --release
 
 ```powershell
 # 1. 前端 + Rust（见上）
-# 2. 组装 release/lantai-shell-<版本>-windows-x64/
+# 2. 组装 release/lantai-shell-<版本>-windows-x64/（发布单轨，0.1.22 起）
 #    - lantai-shell.exe（壳）
 #    - WebView2Loader.dll（target/release/ 下，webview2-com-sys 构建时生成）
 #    - portable.marker（空文件，便携模式标记）
-#    - 兰台服务 one-dir 全部内容（lantai.exe + _internal/ + frontend/ 等，来自
-#      release/lantai-<版本>-windows-x64/）
+#    - 兰台服务 one-dir 全部内容（lantai.exe + _internal/ + frontend/ 等，PyInstaller 打包）
+#    - 注意：目录与 zip 不得包含 data/（首次启动自动创建）
 # 3. 压缩 zip
 ```
 
-> 壳与兰台服务同版本号（0.1.20）：壳目录内嵌同版本服务 one-dir，双击 lantai-shell.exe 即单机应用。
+> 壳与兰台服务同版本号（0.1.x）：壳目录内嵌同版本服务 one-dir，双击 lantai-shell.exe 即单机应用。
+> **单轨发布（CH-041）**：服务版目录/zip 不再单独发布（历史双轨保留可回滚）；壳目录内 lantai.exe 兼作调试/直跑入口。
 
 ## 打包相关坑（沿用 dsh-ui 经验）
 

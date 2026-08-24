@@ -90,15 +90,12 @@ python -m uvicorn app.main:app --port 8000
 
 浏览器打开 **http://127.0.0.1:8000**。
 
-### 方式二：编译版运行（release）
+### 方式二：桌面壳（编译版，唯一发布形态）
 
-解压 `release/lantai-0.1.21-windows-x64.zip`，运行目录内 `lantai.exe`，浏览器打开 http://127.0.0.1:8000。
+解压 `release/lantai-shell-0.1.x-windows-x64.zip`，双击目录内 `lantai-shell.exe`——壳自动在内部拉起兰台服务（**无独立 cmd 窗口**），就绪后直接显示兰台界面；右下角「终端」按钮可查看服务日志/重启/停止；关闭窗口即退出并结束服务。数据保存在壳目录的 `data/` 下。
 
-### 方式三：桌面壳（单机应用形态）
-
-解压 `release/lantai-shell-0.1.21-windows-x64.zip`，双击目录内 `lantai-shell.exe`——壳自动在内部拉起兰台服务（**无独立 cmd 窗口**），就绪后直接显示兰台界面；右下角「终端」按钮可查看服务日志/重启/停止；关闭窗口即退出并结束服务。数据仍保存在壳目录的 `data/` 下。
-
-> 两种形态数据不互通：`lantai.exe` 直接运行的 `data/` 在服务 exe 目录，壳内服务的 `data/` 在壳目录。如需迁移，整体拷贝 `data/` 目录即可。
+> 壳目录内的 `lantai.exe` 为内嵌服务（供壳拉起），也可直接运行作为调试/直跑入口：`lantai.exe` 自动打开浏览器；`lantai.exe --server` 不自动打开（供壳使用）。
+> 历史版本（0.1.21 及更早）曾双轨发布独立服务版 `lantai-0.1.x-windows-x64/`，保留可回滚；0.1.22 起仅发布壳单轨。
 
 > 数据（`rag.db`、上传源文件）保存在运行目录的 `data/` 下，整体拷贝目录即可迁移。
 
@@ -112,7 +109,7 @@ python -m uvicorn app.main:app --port 8000
 
 - 版本规则：首个版本 **0.1.1**，每次变更**第三段 +1**（0.1.1 → 0.1.2 → …）。
 - **各版本号与修改内容见 `docs/03-增长迭代/版本记录.md`**（不在此罗列）。
-- 发布物：`release/lantai-0.1.x-windows-x64/`（PyInstaller one-dir 编译版，**不制作 setup 安装包**），随附 zip 压缩包；`release/lantai-shell-0.1.x-windows-x64/`（桌面壳绿色便携版：壳 exe + 服务 one-dir，双击即用）。
+- 发布物：`release/lantai-shell-0.1.x-windows-x64/`（桌面壳绿色便携版：壳 exe + 服务 one-dir + WebView2Loader.dll，双击即用，**不制作 setup 安装包**），随附 zip 压缩包；**0.1.22 起为唯一发布形态**（此前双轨的独立服务版目录保留可回滚）。
 - 路线图与档位 3 方案（流式 SSE、对话历史、rerank、hybrid 检索、向量库替换、多跳聚合、RBAC、多平台）见 `docs/01-需求调研/需求池管理表.md` 与 `docs/02-方案设计/技术对接方案.md`。
 
 ## 文档导航

@@ -29,9 +29,13 @@
 | 壳配置 | 便携模式：程序目录 `settings.json`；标准运行：`%APPDATA%\com.lantai.app\settings.json` |
 | 兰台数据 | 与 `lantai.exe` 同目录的 `data/`（rag.db、uploads、logs） |
 
-## 直接运行服务（不使用壳）
+## 内嵌服务（调试/直跑入口）
 
-`release/lantai-0.1.20-windows-x64/lantai.exe`——原有控制台模式，自动打开浏览器；`--server` 参数不自动打开浏览器（供壳使用）。
+壳目录内的 `lantai.exe` 为内嵌服务（壳自动拉起，`--server` 模式不自动打开浏览器）：
+- 直接运行 `lantai.exe`——原有控制台模式，自动打开浏览器（调试/直跑用）
+- 运行 `lantai.exe --server`——不自动打开浏览器（供壳内部使用）
+
+> **发布单轨（0.1.22 起）**：发布物只有 `release/lantai-shell-0.1.x-windows-x64/`（壳 + 服务一体），不再单独发布服务版目录/zip；历史双轨版本保留可回滚。
 
 ## 更新记录
 
