@@ -52,6 +52,13 @@
     <section id="view-docs" class="view">
       <div class="docs-toolbar">
         <button id="btn-upload" class="primary">上传文档</button>
+        <span class="doc-filter" id="doc-filter">
+          <button class="filter-btn active" data-status="">全部</button>
+          <button class="filter-btn" data-status="ready">已就绪</button>
+          <button class="filter-btn" data-status="queued">排队中</button>
+          <button class="filter-btn" data-status="parsing">解析中</button>
+          <button class="filter-btn" data-status="failed">失败</button>
+        </span>
         <span class="hint">支持 txt / md / pdf / docx / doc / wps / xls / xlsx / ppt / pptx / 图片，单个 ≤ 20MB；可拖拽批量上传，解析按队列排队执行</span>
       </div>
       <table class="doc-table">

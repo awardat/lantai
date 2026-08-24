@@ -150,6 +150,21 @@ class Store:
                 conn.execute(sql, params)
                 conn.commit()
 
+    def retry_document(self, doc_id: int) -> bool:
+        """失败文档原子置回排队（仅 failed → queued 并清空 error），返回是否转换成功。
+
+        0.1.35（CH-062）：check-then-act 合并为单条条件 UPDATE，并发重试只有一个
+        请求能转换成功，其余返回 False（消除 L4 TOCTOU 双入队）。
+        """
+        with self._lock:
+            with self._connect() as conn:
+                cur = conn.execute(
+                    "UPDATE documents SET status='queued', error=NULL WHERE id=? AND status='failed'",
+                    (doc_id,),
+                )
+                conn.commit()
+                return cur.rowcount > 0
+
     def set_document_category(self, doc_id: int, category: str) -> None:
         with self._lock:
             with self._connect() as conn:

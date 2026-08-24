@@ -1,6 +1,6 @@
 # 兰台（lantai）· 本地 RAG 知识库
 
-> 版本 **0.1.32** ｜ 平台 **Windows x64**（MVP）｜ 单机部署 ｜ 无构建步骤，两步启动
+> 版本 **0.1.35** ｜ 平台 **Windows x64**（MVP）｜ 单机部署 ｜ 无构建步骤，两步启动
 
 ## 起名意境
 
@@ -20,11 +20,11 @@
 
 适合：个人知识管理、本地资料问答演示、企业内网离线知识库原型。
 
-## 功能一览（v0.1.32）
+## 功能一览（v0.1.35）
 
 | 模块 | 功能 |
 |------|------|
-| 文档管理 | 上传（≤20MB）、解析状态、文档列表、删除（连同向量与源文件） |
+| 文档管理 | 上传（≤20MB）、解析状态（全部/已就绪/排队中/解析中/失败**筛选**）、文档列表、**失败原因悬停 + 失败重试**、删除（连同向量与源文件） |
 | 知识问答 | 提问 → top-k 检索 → AI 生成答案；展示相似度分数、引用来源、源文件预览 |
 | 文件类型 AI | 五类文件各自配置 provider / 模型 / 提示词；问答与 embedding 全局配置 |
 | 配置功能 | 设置图标进入（**密码门禁**，默认 `Admin#123`，可修改）：AI 配置（**输入框焦点离开自动保存**）、API token 生成/吊销、修改密码、关于 |
@@ -65,13 +65,13 @@ ollama pull llava:7b                            # 图片理解模型（可选；
 
 | 用途 | 文件类型 / 功能 | 本地（Ollama） | 云端推荐（国产优先） |
 |------|----------------|----------------|----------------------|
-| 文字理解 | 文字文档 / Office / 文字 PDF 处理、知识问答 | `qwen2.5:7b` | DeepSeek `deepseek-v4-flash` ｜ 通义 `qwen-plus` ｜ 智谱 `glm-4-plus` |
-| 图片理解 | 图片（视觉描述入库） | `qwen2.5vl:7b`（或 `llava:7b`） | 通义 `qwen-vl-plus` ｜ 智谱 `glm-4v-plus` ｜ 硅基流动 `Qwen/Qwen2.5-VL-7B-Instruct` |
+| 文字理解 | 文字文档 / Office / 文字 PDF 处理、知识问答 | `qwen2.5:7b` | DeepSeek `deepseek-v4-flash` ｜ 通义 `qwen-plus` ｜ 智谱 `glm-4-plus` ｜ 小米 MiMo `mimo-v2.5-pro` |
+| 图片理解 | 图片（视觉描述入库） | `qwen2.5vl:7b`（或 `llava:7b`） | 通义 `qwen-vl-plus` ｜ 智谱 `glm-4v-plus` ｜ 小米 MiMo `mimo-v2.5-pro` ｜ 硅基流动 `Qwen/Qwen2.5-VL-7B-Instruct` |
 | OCR | 图片 PDF（扫描件识别） | `qwen2.5vl:7b`（或 `llava:7b`） | 通义 `qwen-vl-plus` ｜ 智谱 `glm-4v-plus` |
 | 向量化 | embedding（全局，所有文件入库） | `bge-m3` | 通义 `text-embedding-v3` ｜ 硅基流动 `BAAI/bge-m3` |
 
-> **提示**：DeepSeek、Kimi 官方 API **无 embedding 接口**，向量化请选通义 / 硅基流动 / 本地 `bge-m3`。
-> 设置页「AI 配置」的**供应商下拉**已预置以上供应商与 Base URL（Ollama、DeepSeek、OpenCode Go、通义、智谱、Kimi、硅基流动、OpenAI），选择后自动填充推荐模型，可手动修改；填入 API Key 后点击**「测试」**可验证连通性并获取模型清单（点击模型名自动填入）。
+> **提示**：DeepSeek、Kimi、小米 MiMo 官方 API **无 embedding 接口**，向量化请选通义 / 硅基流动 / 本地 `bge-m3`。
+> 设置页「AI 配置」的**供应商下拉**已预置以上供应商与 Base URL（Ollama、DeepSeek、OpenCode Go、通义、智谱、Kimi、小米 MiMo、硅基流动、OpenAI），选择后自动填充推荐模型，可手动修改；填入 API Key 后点击**「测试」**可验证连通性并获取模型清单（点击模型名自动填入）。
 
 ## 用法
 

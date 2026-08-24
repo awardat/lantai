@@ -64,6 +64,15 @@ VENDORS: list[dict] = [
         "note": "国产；无 embedding 接口",
     },
     {
+        "id": "mimo",
+        "name": "小米 MiMo",
+        "provider": "openai-compatible",
+        "base_url": "https://api.xiaomimimo.com/v1",
+        "capabilities": ["chat", "vision"],
+        "models": {"chat": "mimo-v2.5-pro", "vision": "mimo-v2.5-pro"},
+        "note": "国产；小米 MiMo API 开放平台（OpenAI 兼容，支持图片理解，1M 上下文）；无 embedding 接口，向量化请用通义/硅基流动或本地 bge-m3；API Key 在 platform.xiaomimimo.com 创建（sk- 开头）",
+    },
+    {
         "id": "siliconflow",
         "name": "硅基流动（SiliconFlow）",
         "provider": "openai-compatible",

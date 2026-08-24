@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-APP_VERSION = "0.1.32"
+APP_VERSION = "0.1.35"
 APP_NAME = "lantai"
 
 
@@ -40,6 +40,13 @@ ALLOWED_EXTS = {
     ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif",
 }
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
+
+
+def allowed_exts_label() -> str:
+    """上传白名单展示文案（0.1.35 起由 ALLOWED_EXTS 动态生成，杜绝与文档三方漂移）。"""
+    docs = sorted(e.lstrip(".") for e in ALLOWED_EXTS - IMAGE_EXTS)
+    imgs = sorted(e.lstrip(".") for e in IMAGE_EXTS)
+    return " / ".join(docs) + " / 图片（" + "、".join(imgs) + "）"
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000

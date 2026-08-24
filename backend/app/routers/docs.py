@@ -25,7 +25,7 @@ def upload_document(file: UploadFile = File(...)):
     if ext not in config.ALLOWED_EXTS:
         raise HTTPException(
             status_code=415,
-            detail=f"不支持的文件类型（{ext or '无扩展名'}）。支持：txt / md / pdf / docx / 图片（png、jpg、jpeg、webp、bmp、gif）。",
+            detail=f"不支持的文件类型（{ext or '无扩展名'}）。支持：{config.allowed_exts_label()}。",
         )
     data = file.file.read()  # def 端点：同步读取上传内容（FastAPI 线程池执行）
     if len(data) > config.MAX_UPLOAD_MB * 1024 * 1024:
@@ -77,6 +77,21 @@ def delete_document(doc_id: int):
 
         shutil.rmtree(doc_dir, ignore_errors=True)
     return ok(None, message=f"已删除文档：{doc['name']}")
+
+
+@router.post("/{doc_id}/retry")
+def retry_document(doc_id: int):
+    """失败文档重新提交解析（0.1.34 CH-060；0.1.35 CH-062 起"校验+置 queued"合并为
+    store 层原子条件 UPDATE，并发重试不会双次入队）。"""
+    doc = store.get_document(doc_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="文档不存在或已被删除。")
+    if not store.retry_document(doc_id):
+        raise HTTPException(status_code=400, detail="仅失败状态的文档可以重新解析。")
+    from ..task_queue import enqueue
+
+    enqueue(doc_id)
+    return ok(None, message=f"已重新提交解析：{doc['name']}")
 
 
 @router.get("/{doc_id}/preview")

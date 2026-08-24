@@ -53,6 +53,11 @@ function esc(s) {
   return div.innerHTML;
 }
 
+// 属性上下文转义（0.1.34，CH-060）：在 esc 基础上补双/单引号，用于 title/onclick 等属性位
+function escAttr(s) {
+  return esc(s).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 function fmtSize(n) {
   if (n < 1024) return n + " B";
   if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
@@ -243,14 +248,19 @@ async function loadParseTab() {
 
 function renderDocs(docs) {
   const tbody = $("#doc-tbody");
-  if (!docs.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="7">暂无文档，点击右上角「上传文档」开始</td></tr>';
+  // 状态筛选（0.1.34，CH-060）：按当前筛选状态过滤后渲染
+  const filtered = docFilter ? docs.filter((d) => d.status === docFilter) : docs;
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="7">${docs.length ? "没有符合当前筛选条件的文档" : "暂无文档，点击右上角「上传文档」开始"}</td></tr>`;
     return;
   }
-  tbody.innerHTML = docs.map((d) => {
+  tbody.innerHTML = filtered.map((d) => {
     const stateMap = { ready: ["ready", "已就绪"], failed: ["failed", "失败"], queued: ["queued", "排队中"], parsing: ["parsing", "解析中…"] };
     const [stateCls, stateText] = stateMap[d.status] || ["parsing", d.status];
-    const errorTip = d.error ? ` title="${esc(d.error)}"` : "";
+    // 失败原因悬停提示：escAttr 转义引号，避免 error 含 " 破坏 title 属性（CH-060/M1）
+    const errorTip = d.error ? ` title="${escAttr(d.error)}"` : "";
+    const retryBtn = d.status === "failed"
+      ? `<button class="mini-btn" onclick="retryDoc(${d.id})">重试</button>` : "";
     return `<tr>
       <td>${esc(d.name)}</td>
       <td>${esc(CATEGORY_LABELS[d.category] || d.category)}</td>
@@ -260,11 +270,34 @@ function renderDocs(docs) {
       <td>${esc(d.created_at)}</td>
       <td>
         <button class="mini-btn" onclick="openPreview(${d.id})">预览</button>
+        ${retryBtn}
         <button class="mini-btn danger" onclick="deleteDoc(${d.id}, '${esc(d.name).replace(/'/g, "\\'")}')">删除</button>
       </td>
     </tr>`;
   }).join("");
 }
+
+// 失败文档重新提交解析（0.1.34，CH-060）
+async function retryDoc(id) {
+  try {
+    const r = await api(`/api/docs/${id}/retry`, { method: "POST" });
+    toast(r && r.message ? r.message : "已重新提交解析。", "success");
+  } catch (e) {
+    toast(e.message, "error");
+  }
+  loadDocs();
+}
+
+// 状态筛选按钮（全部/已就绪/排队中/解析中/失败）
+let docFilter = "";
+document.querySelectorAll("#doc-filter .filter-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#doc-filter .filter-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    docFilter = btn.dataset.status || "";
+    loadDocs();
+  });
+});
 
 async function deleteDoc(id, name) {
   if (!confirm(`确定删除文档「${name}」吗？其全部切片与源文件将一并删除。`)) return;

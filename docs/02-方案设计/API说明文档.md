@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 |------|------|
 | 产品名称 | 兰台（lantai）本地 RAG 知识库 |
-| 文档版本 | V1.30（对应应用 0.1.32） |
+| 文档版本 | V1.33（对应应用 0.1.35） |
 | 生成时间 | 2026-08-23 |
 | 数据来源 | 技术对接方案.md、PRD产品需求文档.md（§6）、数据库设计文档.md |
 | 适用范围 | 前端调用与外部程序集成（API token） |
@@ -83,7 +83,7 @@ curl -F "file=@./兰台简介.txt" http://127.0.0.1:8000/api/docs/upload
 
 > **文档状态机（0.1.18 起）**：`queued`（排队中）→ `parsing`（解析中）→ `ready`（已就绪）／`failed`（失败，error 含原因）；服务重启自动恢复排队/解析中的文档重新入队。解析并发默认 10，可在设置「解析」调整（1~50，即时生效）。
 
-**错误示例**：`415` `{"code":415,"message":"不支持的文件类型（.exe）。支持：txt / md / pdf / docx / doc / wps / xls / xlsx / ppt / pptx / 图片（png、jpg、jpeg、webp、bmp、gif）。","data":null}`
+**错误示例**：`415` `{"code":415,"message":"不支持的文件类型（.exe）。支持：doc / docx / md / pdf / ppt / pptx / txt / wps / xls / xlsx / 图片（bmp、gif、jpeg、jpg、png、webp）。","data":null}`（0.1.35 起文案由 `ALLOWED_EXTS` 动态生成，此处示例与代码输出一致）
 
 ### 2.2 文档列表
 
@@ -96,6 +96,10 @@ curl -F "file=@./兰台简介.txt" http://127.0.0.1:8000/api/docs/upload
 ### 2.4 删除文档
 
 `DELETE /api/docs/{doc_id}` → 级联删除全部切片与源文件；成功返回 `{"code":0,"message":"已删除文档：<名称>","data":null}`。
+
+### 2.4b 失败文档重试（V1.32 新增）
+
+`POST /api/docs/{doc_id}/retry` → 仅 `failed` 状态可重试：置 `queued` 重新入队解析；非失败返回 400 `仅失败状态的文档可以重新解析。`；不存在返回 404。0.1.35 起"校验+置 queued"合并为 store 层原子条件 UPDATE（`WHERE status='failed'`），并发重试不会双次入队。
 
 ### 2.5 预览源文件（文本）
 
@@ -308,7 +312,7 @@ data: {"type": "done"}
 ```json
 {
   "code": 0, "message": "ok",
-  "data": {"version": "0.1.32", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
+  "data": {"version": "0.1.35", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
 }
 ```
 
@@ -407,7 +411,7 @@ with httpx.Client(base_url="http://127.0.0.1:8000") as c:
 
 ---
 
-**文档状态**: API 说明 V1.30（与应用 0.1.32 同步）
+**文档状态**: API 说明 V1.33（与应用 0.1.35 同步）
 **生成时间**: 2026-08-23
 **前置文档**: 技术对接方案.md、PRD产品需求文档.md、数据库设计文档.md
 **变更规则**: 接口变更时本文件随版本同步更新（0.1.1 → 0.1.2 → …）
