@@ -27,3 +27,9 @@ Thumbs.db
 
 # 用户样本素材（分析工具可引用，不入库）
 sample/
+
+# 独立知识备忘（与本项目无关，不随项目推送 GitHub）
+knowledge/
+
+# 壳便携运行时配置（防遗漏）
+settings.json
