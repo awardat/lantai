@@ -28,7 +28,7 @@ cargo build --release
 
 ## 版本号约定
 
-每次功能改动版本号第三段 +1（当前 0.1.19，与兰台本体同版本体系）。同步修改三处：
+每次功能改动版本号第三段 +1（当前 0.1.20，与兰台本体同版本体系）。同步修改三处：
 `src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`、`package.json`（另：README「更新记录」、本文件、方案.md）。
 
 ## 构建绿色便携目录（发布）
@@ -44,7 +44,7 @@ cargo build --release
 # 3. 压缩 zip
 ```
 
-> 壳与兰台服务同版本号（0.1.19）：壳目录内嵌同版本服务 one-dir，双击 lantai-shell.exe 即单机应用。
+> 壳与兰台服务同版本号（0.1.20）：壳目录内嵌同版本服务 one-dir，双击 lantai-shell.exe 即单机应用。
 
 ## 打包相关坑（沿用 dsh-ui 经验）
 

@@ -1,6 +1,6 @@
 [package]
 name = "lantai-shell"
-version = "0.1.19"
+version = "0.1.20"
 description = "兰台（lantai）本地 RAG 知识库桌面壳：内嵌终端 + WebView 包装"
 authors = ["lantai"]
 edition = "2021"
@@ -15,7 +15,10 @@ crate-type = ["rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["devtools"] }
+# custom-protocol 必须显式启用：否则 tauri 处于 dev 模式，release 构建会加载 devUrl
+# （http://localhost:1420）而非本地资产（tauri://），表现为"localhost 拒绝连接"。
+# tauri CLI（tauri build）会自动注入该 feature；裸 cargo build 需手动声明。
+tauri = { version = "2", features = ["devtools", "custom-protocol"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-single-instance = "2"

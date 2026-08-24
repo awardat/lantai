@@ -4,7 +4,7 @@
 
 ## 快速开始（绿色便携版）
 
-1. 解压 `release/lantai-shell-0.1.19-windows-x64.zip` 到任意目录（如 `D:\tools\lantai`）；
+1. 解压 `release/lantai-shell-0.1.20-windows-x64.zip` 到任意目录（如 `D:\tools\lantai`）；
 2. 双击 `lantai-shell.exe` 启动——壳在内部自动拉起兰台服务，就绪后显示主界面；
 3. 关闭窗口即退出应用并结束服务（默认行为，可在设置中改为"退出后保持服务运行"）。
 
@@ -31,11 +31,12 @@
 
 ## 直接运行服务（不使用壳）
 
-`release/lantai-0.1.19-windows-x64/lantai.exe`——原有控制台模式，自动打开浏览器；`--server` 参数不自动打开浏览器（供壳使用）。
+`release/lantai-0.1.20-windows-x64/lantai.exe`——原有控制台模式，自动打开浏览器；`--server` 参数不自动打开浏览器（供壳使用）。
 
 ## 更新记录
 
 - **0.1.19（2026-08-23）**：首个兰台壳版本。复用 dsh-ui 的 Tauri 2 壳工程：自动拉起服务、就绪探测 8000、终端浮层、Job Object 退出清理、单实例、缩放、便携模式；`lantai.exe` 新增 `--server` 模式。
+- **0.1.20（2026-08-24）**：修复壳加载 devUrl 缺陷（显式启用 `tauri/custom-protocol`，release 加载本地资产 tauri://，不再出现"localhost 拒绝连接"）；发布物不再包含 data/（首次启动自动创建，避免测试残留混入发行版）。
 
 ## 开发
 

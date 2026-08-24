@@ -45,6 +45,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - **首个版本号 `0.1.1`**；**每次变更第三段 +1**（0.1.1 → 0.1.2 → 0.1.3 …），版本号同步更新于代码、README 与相关文档。
 - **不建立 setup 安装包**；编译版本放在 `release/lantai-0.1.x-windows-x64/` 文件夹（PyInstaller one-dir，含可执行文件 + 前端静态资源 + 数据目录说明），可整体拷贝运行。
 - **桌面壳**：`release/lantai-shell-0.1.x-windows-x64/` 绿色便携目录（壳 exe + WebView2Loader.dll + portable.marker + 兰台服务 one-dir 内容），不建 setup；壳与兰台同版本号体系（第三段 +1）。
+- **发行版不得包含测试数据（硬性）**：release 目录与 zip **一律不含 data/**（rag.db、uploads/、logs/ 均不打包；首次启动自动创建）；发布前核对发行物清单（教训：0.1.19 壳 zip 误含自测空库与日志，用户解压后误判"数据库被重置"，CH-039）。
 
 ## 技术栈与关键约束
 
@@ -86,6 +87,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - 发布前逐项过版本号清单（教训：H3 config 落后一版）
 - 测试前检查 8000 端口占用（外部旧进程干扰），避免误测
 - 新依赖/新资源必须验证**打包产物**（_internal 检查）与**响应行为**（如 attachment→inline）
+- 发布前核对**发行物清单**：release 目录与 zip 不得包含 data/、日志、测试残留（教训：CH-039 壳 zip 误含测试 data）
 - 自测结论在交付说明中明示：通过项、覆盖到的分支、未覆盖项（如依赖真实视觉模型的部分）
 
 ### 4. 测试文档
@@ -115,6 +117,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - ✅ 已执行：0.1.17（用户确认整改方案后实施）：评审文档整改（代码与文档评审报告-v0.1.16.md）——M1 测试方案升 0.1.17 并补 GBT 用例、M2 技术对接方案补 inline/可读性/双引擎、L1-L5 文档同步（原型方案两栏布局、变更详情、版本记录 0.1.14 撤销行等）、L8 阈值注释；L6/L7/L9 延后；`release/lantai-0.1.17-windows-x64/` 验证可运行。
 - ✅ 已执行：0.1.18（用户提出后实施）：**批量上传浮层**（点击"上传文档"展开，拖拽即传+保留选择文件按钮，前端小并发上传、列表实时状态）；**解析队列**（FIFO + 固定并发 worker 默认 10，设置页「解析」可调 1~50 即时生效；文档新增"排队中"状态；重启自动恢复排队文档）；`release/lantai-0.1.18-windows-x64/` 验证可运行。
 - ✅ 已执行：0.1.19（用户确认壳方案后实施，CH-037/R119）：**桌面壳（lantai-shell）**——复用 C:\code\dsh-ui 的 Tauri 2 壳工程至 `shell/`：ConPTY 无窗口拉起兰台服务（`lantai.exe --server` 新增参数不开浏览器）、就绪探测 8000 后 iframe 内嵌页面、终端浮层（日志/重启/停止）、Job Object 关闭清理、单实例、缩放、便携模式；直接运行 `lantai.exe` 保持原控制台模式；绿色便携 `release/lantai-shell-0.1.19-windows-x64/`（不建 setup）；文档：桌面壳方案（docs/02）、R119、CH-037、版本记录、README。
+- ✅ 已执行：0.1.20（用户报告缺陷后修复，CH-039）：**壳"localhost 拒绝连接"**——裸 cargo build 缺 `tauri/custom-protocol` feature 导致 release exe 处于 dev 模式加载 devUrl（localhost:1420）；修复：显式启用 custom-protocol（Cargo.toml 注释说明 + 壳文档）；**发行版不含测试数据**（绿色目录/zip 不再打包 data/，AGENTS.md 增硬性条款）；CDP 实测主窗口加载 tauri:// 本地资产 + iframe 显示兰台页面。
 - ⏳ **等待用户确认**后再进入后续迭代（RBAC、多平台、Docker、档位 3 等均只入需求与文档）。
 
 ## 会话注意事项
