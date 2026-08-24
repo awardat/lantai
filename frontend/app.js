@@ -773,11 +773,32 @@ $("#btn-create-token").addEventListener("click", async () => {
   }
 });
 
+function copyTextFallback(text) {
+  // 壳内跨站 iframe（tauri.localhost 嵌入 127.0.0.1）：navigator.clipboard 受
+  // Permissions Policy clipboard-write 限制会抛错；降级 execCommand("copy")
+  // （仅需用户手势，不受该策略限制）
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+  ta.remove();
+  return ok;
+}
+
 async function copyToken() {
+  const text = window._lastPlain || "";
   try {
-    await navigator.clipboard.writeText(window._lastPlain || "");
+    await navigator.clipboard.writeText(text);
     toast("已复制。", "success");
-  } catch (e) {
+    return;
+  } catch (e) { /* 跨站 iframe 权限受限，走降级 */ }
+  if (copyTextFallback(text)) {
+    toast("已复制。", "success");
+  } else {
     toast("复制失败，请手动选择复制。", "error");
   }
 }

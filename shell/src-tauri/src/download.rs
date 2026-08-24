@@ -153,7 +153,8 @@ pub fn setup(app: &AppHandle, main: &WebviewWindow) {
             return;
         };
 
-        // 自动允许"下载多个文件"权限（否则 WebView2 弹 edge://permission-request-dialog）
+        // 自动允许"下载多个文件"与"剪贴板读写"权限（否则 WebView2 弹权限对话框 /
+        // navigator.clipboard 在 iframe 内失败；前端另有 execCommand 降级兜底）
         if let Ok(wv8) = core.cast::<ICoreWebView2_8>() {
             let handle_perm = app.clone();
             let perm_handler = PermissionRequestedEventHandler::create(Box::new(move |_, args| {
@@ -165,7 +166,14 @@ pub fn setup(app: &AppHandle, main: &WebviewWindow) {
                     0,
                 );
                 let _ = unsafe { args.PermissionKind(&mut kind) };
-                if kind == COREWEBVIEW2_PERMISSION_KIND_MULTIPLE_AUTOMATIC_DOWNLOADS {
+                // WebView2 枚举：ClipboardRead=6 / ClipboardWrite=7（新版 SDK 拆分为两个值，
+                // 无合并的 CLIPBOARD_READ_WRITE 常量，故按数值匹配）
+                let kind_clip_r = webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_PERMISSION_KIND(6);
+                let kind_clip_w = webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_PERMISSION_KIND(7);
+                if kind == COREWEBVIEW2_PERMISSION_KIND_MULTIPLE_AUTOMATIC_DOWNLOADS
+                    || kind == kind_clip_r
+                    || kind == kind_clip_w
+                {
                     let _ = unsafe { args.SetState(COREWEBVIEW2_PERMISSION_STATE_ALLOW) };
                 }
                 let _ = handle_perm;
