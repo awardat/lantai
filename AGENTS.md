@@ -19,6 +19,7 @@ docs/04-风控管理/      # （预留：需求变更记录等）
 docs/05-质量评审/      # 质量评审报告、测试报告、验收记录等
 backend/               # FastAPI 后端（纯 API，/api/*）
 frontend/              # 手写原生 HTML/CSS/JS 前端（无构建步骤，FastAPI 托管）
+shell/                 # 桌面壳工程（Tauri 2，复用 C:\code\dsh-ui；src-tauri + ui + 壳文档）
 release/               # 编译发布目录（见"版本与发布"）
 scripts/               # 开发自测脚本（make_sample_docs.py 等）
 docs/演示文档/          # 用户演示文档目录（用户提供，import_docs.py 默认导入此目录）
@@ -43,6 +44,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 
 - **首个版本号 `0.1.1`**；**每次变更第三段 +1**（0.1.1 → 0.1.2 → 0.1.3 …），版本号同步更新于代码、README 与相关文档。
 - **不建立 setup 安装包**；编译版本放在 `release/lantai-0.1.x-windows-x64/` 文件夹（PyInstaller one-dir，含可执行文件 + 前端静态资源 + 数据目录说明），可整体拷贝运行。
+- **桌面壳**：`release/lantai-shell-0.1.x-windows-x64/` 绿色便携目录（壳 exe + WebView2Loader.dll + portable.marker + 兰台服务 one-dir 内容），不建 setup；壳与兰台同版本号体系（第三段 +1）。
 
 ## 技术栈与关键约束
 
@@ -112,6 +114,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - ✅ 已执行：0.1.16（用户报告 GBT 43052 PDF 误判后修复）：`text_readability` 可读性检测（CJK/英文占比-字符码惩罚）＋pdfminer 空/不可读回退 pypdf（可读才采用，防伪文本入库）＋`pdf_image` 预览 note 说明"文本层编码不可映射（缺 ToUnicode），经 OCR 识别"；GBT 样本仍走 OCR（判定正确）、Asperger/扫描件回归不变；`release/lantai-0.1.16-windows-x64/` 验证可运行。
 - ✅ 已执行：0.1.17（用户确认整改方案后实施）：评审文档整改（代码与文档评审报告-v0.1.16.md）——M1 测试方案升 0.1.17 并补 GBT 用例、M2 技术对接方案补 inline/可读性/双引擎、L1-L5 文档同步（原型方案两栏布局、变更详情、版本记录 0.1.14 撤销行等）、L8 阈值注释；L6/L7/L9 延后；`release/lantai-0.1.17-windows-x64/` 验证可运行。
 - ✅ 已执行：0.1.18（用户提出后实施）：**批量上传浮层**（点击"上传文档"展开，拖拽即传+保留选择文件按钮，前端小并发上传、列表实时状态）；**解析队列**（FIFO + 固定并发 worker 默认 10，设置页「解析」可调 1~50 即时生效；文档新增"排队中"状态；重启自动恢复排队文档）；`release/lantai-0.1.18-windows-x64/` 验证可运行。
+- ✅ 已执行：0.1.19（用户确认壳方案后实施，CH-037/R119）：**桌面壳（lantai-shell）**——复用 C:\code\dsh-ui 的 Tauri 2 壳工程至 `shell/`：ConPTY 无窗口拉起兰台服务（`lantai.exe --server` 新增参数不开浏览器）、就绪探测 8000 后 iframe 内嵌页面、终端浮层（日志/重启/停止）、Job Object 关闭清理、单实例、缩放、便携模式；直接运行 `lantai.exe` 保持原控制台模式；绿色便携 `release/lantai-shell-0.1.19-windows-x64/`（不建 setup）；文档：桌面壳方案（docs/02）、R119、CH-037、版本记录、README。
 - ⏳ **等待用户确认**后再进入后续迭代（RBAC、多平台、Docker、档位 3 等均只入需求与文档）。
 
 ## 会话注意事项

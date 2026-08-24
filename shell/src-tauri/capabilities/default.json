@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "主窗口与浮层窗口的默认权限；包含对本机兰台服务的远程页面 IPC 授权（用于缩放快捷键注入）",
+  "windows": ["main", "overlay"],
+  "remote": {
+    "urls": ["http://127.0.0.1:*", "http://localhost:*"]
+  },
+  "permissions": [
+    "core:default",
+    "core:webview:allow-set-webview-zoom",
+    "opener:default",
+    "dialog:default"
+  ]
+}

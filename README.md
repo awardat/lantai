@@ -1,6 +1,6 @@
 # 兰台（lantai）· 本地 RAG 知识库
 
-> 版本 **0.1.18** ｜ 平台 **Windows x64**（MVP）｜ 单机部署 ｜ 无构建步骤，两步启动
+> 版本 **0.1.19** ｜ 平台 **Windows x64**（MVP）｜ 单机部署 ｜ 无构建步骤，两步启动
 
 ## 起名意境
 
@@ -20,7 +20,7 @@
 
 适合：个人知识管理、本地资料问答演示、企业内网离线知识库原型。
 
-## 功能一览（v0.1.18）
+## 功能一览（v0.1.19）
 
 | 模块 | 功能 |
 |------|------|
@@ -29,6 +29,7 @@
 | 文件类型 AI | 五类文件各自配置 provider / 模型 / 提示词；问答与 embedding 全局配置 |
 | 配置功能 | 设置图标进入（**密码门禁**，默认 `Admin#123`，可修改）：AI 配置（**输入框焦点离开自动保存**）、API token 生成/吊销、修改密码、关于 |
 | 错误提示 | 全部中文友好提示（Ollama 未启动、模型未拉取、API Key 缺失等场景） |
+| **桌面壳** | `lantai-shell.exe` 单机应用形态：自动拉起服务（无 cmd 窗口）、内嵌页面、终端浮层；直接运行 `lantai.exe` 保持原控制台模式 |
 
 ## 环境配置
 
@@ -91,7 +92,13 @@ python -m uvicorn app.main:app --port 8000
 
 ### 方式二：编译版运行（release）
 
-解压 `release/lantai-0.1.18-windows-x64.zip`，运行目录内 `lantai.exe`，浏览器打开 http://127.0.0.1:8000。
+解压 `release/lantai-0.1.19-windows-x64.zip`，运行目录内 `lantai.exe`，浏览器打开 http://127.0.0.1:8000。
+
+### 方式三：桌面壳（单机应用形态）
+
+解压 `release/lantai-shell-0.1.19-windows-x64.zip`，双击目录内 `lantai-shell.exe`——壳自动在内部拉起兰台服务（**无独立 cmd 窗口**），就绪后直接显示兰台界面；右下角「终端」按钮可查看服务日志/重启/停止；关闭窗口即退出并结束服务。数据仍保存在壳目录的 `data/` 下。
+
+> 两种形态数据不互通：`lantai.exe` 直接运行的 `data/` 在服务 exe 目录，壳内服务的 `data/` 在壳目录。如需迁移，整体拷贝 `data/` 目录即可。
 
 > 数据（`rag.db`、上传源文件）保存在运行目录的 `data/` 下，整体拷贝目录即可迁移。
 
@@ -105,7 +112,7 @@ python -m uvicorn app.main:app --port 8000
 
 - 版本规则：首个版本 **0.1.1**，每次变更**第三段 +1**（0.1.1 → 0.1.2 → …）。
 - **各版本号与修改内容见 `docs/03-增长迭代/版本记录.md`**（不在此罗列）。
-- 发布物：`release/lantai-0.1.x-windows-x64/`（PyInstaller one-dir 编译版，**不制作 setup 安装包**），随附 zip 压缩包。
+- 发布物：`release/lantai-0.1.x-windows-x64/`（PyInstaller one-dir 编译版，**不制作 setup 安装包**），随附 zip 压缩包；`release/lantai-shell-0.1.x-windows-x64/`（桌面壳绿色便携版：壳 exe + 服务 one-dir，双击即用）。
 - 路线图与档位 3 方案（流式 SSE、对话历史、rerank、hybrid 检索、向量库替换、多跳聚合、RBAC、多平台）见 `docs/01-需求调研/需求池管理表.md` 与 `docs/02-方案设计/技术对接方案.md`。
 
 ## 文档导航
@@ -119,6 +126,7 @@ python -m uvicorn app.main:app --port 8000
 | `docs/02-方案设计/数据库设计文档.md` | SQLite 表结构 |
 | `docs/02-方案设计/原型设计方案.md` | 界面与交互设计 |
 | `docs/02-方案设计/开发环境要求.md` | 环境版本清单与管理员安装命令 |
+| `docs/02-方案设计/桌面壳方案.md` | 桌面壳（lantai-shell）方案：架构、状态机、构建发布 |
 
 ## 常见问题
 
