@@ -100,7 +100,7 @@ fn resolve_filename(
     if unsafe { operation.ContentDisposition(&mut pw) }.is_ok() {
         let cd = pwstr_to_string(pw);
         if let Some(name) = parse_disposition_filename(&cd) {
-            return name;
+            return sanitize_filename(&name);
         }
     }
     // 2) query 里的 sessionId（dsh 导出约定命名）
@@ -120,6 +120,21 @@ fn resolve_filename(
         .map(|d| d.as_secs())
         .unwrap_or(0);
     format!("download-{ts}.zip")
+}
+
+/// S-M7 修复：净化下载文件名——仅保留最后一段（file_name），剥离路径分隔符与 `..`，
+/// 防止 Content-Disposition 的绝对路径/`..\` 越界写盘（PathBuf::join 遇绝对路径会整体替换基路径）。
+fn sanitize_filename(name: &str) -> String {
+    use std::path::Path;
+    let cleaned = Path::new(name).file_name()
+        .and_then(|s| s.to_str())
+        .filter(|s| !s.is_empty() && *s != "." && *s != "..")
+        .unwrap_or("download");
+    // 剥离剩余的路径分隔符（file_name 理论上不含，但 percent_decode 后可能残留）
+    cleaned
+        .chars()
+        .filter(|c| *c != '/' && *c != '\\' && *c != ':')
+        .collect()
 }
 
 /// 挂载下载事件。token 不保存（进程生命周期内有效，无需注销）。
@@ -255,5 +270,32 @@ mod tests {
         assert_eq!(percent_decode("%E6%B5%8B"), "测");
         assert_eq!(percent_decode("a%2Fb"), "a/b");
         assert_eq!(percent_decode("plain"), "plain");
+    }
+
+    #[test]
+    fn sanitize_filename_strips_absolute_path() {
+        // S-M7：绝对路径仅保留文件名，防止 join 整体替换基路径
+        assert_eq!(sanitize_filename("C:\\Users\\x\\evil.exe"), "evil.exe");
+        assert_eq!(sanitize_filename("/etc/passwd"), "passwd");
+    }
+
+    #[test]
+    fn sanitize_filename_strips_traversal() {
+        // `..\` 相对穿越仅保留最后一段
+        assert_eq!(sanitize_filename("..\\..\\evil.txt"), "evil.txt");
+        assert_eq!(sanitize_filename("../../evil.txt"), "evil.txt");
+    }
+
+    #[test]
+    fn sanitize_filename_preserves_normal_name() {
+        assert_eq!(sanitize_filename("dsh-session-a.zip"), "dsh-session-a.zip");
+        assert_eq!(sanitize_filename("测试.zip"), "测试.zip");
+    }
+
+    #[test]
+    fn sanitize_filename_handles_dot_only() {
+        assert_eq!(sanitize_filename("."), "download");
+        assert_eq!(sanitize_filename(".."), "download");
+        assert_eq!(sanitize_filename(""), "download");
     }
 }

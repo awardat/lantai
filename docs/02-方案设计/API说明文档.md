@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 |------|------|
 | 产品名称 | 兰台（lantai）本地 RAG 知识库 |
-| 文档版本 | V1.19（对应应用 0.1.21） |
+| 文档版本 | V1.20（对应应用 0.1.22） |
 | 生成时间 | 2026-08-23 |
 | 数据来源 | 技术对接方案.md、PRD产品需求文档.md（§6）、数据库设计文档.md |
 | 适用范围 | 前端调用与外部程序集成（API token） |
@@ -67,19 +67,21 @@
 curl -F "file=@./兰台简介.txt" http://127.0.0.1:8000/api/docs/upload
 ```
 
-**响应示例**（上传成功即返回，解析为异步后台任务）：
+**响应示例**（上传成功即返回，解析为**队列异步任务**，0.1.18 起）：
 
 ```json
 {
   "code": 0,
-  "message": "上传成功，正在解析…",
+  "message": "上传成功，已加入解析队列。",
   "data": {
     "id": 1, "name": "兰台简介.txt", "category": "text", "ext": ".txt",
-    "size": 548, "status": "parsing", "error": null,
+    "size": 548, "status": "queued", "error": null,
     "chunk_count": 0, "created_at": "2026-08-22 23:05:09"
   }
 }
 ```
+
+> **文档状态机（0.1.18 起）**：`queued`（排队中）→ `parsing`（解析中）→ `ready`（已就绪）／`failed`（失败，error 含原因）；服务重启自动恢复排队/解析中的文档重新入队。解析并发默认 10，可在设置「解析」调整（1~50，即时生效）。
 
 **错误示例**：`415` `{"code":415,"message":"不支持的文件类型（.exe）。支持：txt / md / pdf / docx / 图片（png、jpg、jpeg、webp、bmp、gif）。","data":null}`
 
@@ -305,8 +307,19 @@ data: {"type": "done"}
 ```json
 {
   "code": 0, "message": "ok",
-  "data": {"version": "0.1.21", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
+  "data": {"version": "0.1.22", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
 }
+```
+
+### 4.7b 解析队列配置（需会话，V1.20 新增）
+
+- `GET /api/settings/parse` → 当前并发数：`{"code":0,"message":"ok","data":{"concurrency":10}}`
+- `PUT /api/settings/parse` → 请求体 `{"concurrency": 10}`（1~50 校验，即时生效）：动态调整解析队列 worker 数（重启 worker 生效新并发，排队任务不丢）
+
+```bash
+curl -X PUT http://127.0.0.1:8000/api/settings/parse \
+  -H "Cookie: lantai_session=<会话>" -H "Content-Type: application/json" \
+  -d '{"concurrency": 20}'
 ```
 
 ### 4.8 预置 AI 供应商目录（免会话，V1.2 新增）
@@ -393,7 +406,7 @@ with httpx.Client(base_url="http://127.0.0.1:8000") as c:
 
 ---
 
-**文档状态**: API 说明 V1.19（与应用 0.1.21 同步）
+**文档状态**: API 说明 V1.20（与应用 0.1.22 同步）
 **生成时间**: 2026-08-23
 **前置文档**: 技术对接方案.md、PRD产品需求文档.md、数据库设计文档.md
 **变更规则**: 接口变更时本文件随版本同步更新（0.1.1 → 0.1.2 → …）

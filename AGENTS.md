@@ -120,6 +120,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - ✅ 已执行：0.1.20（用户报告缺陷后修复，CH-039）：**壳"localhost 拒绝连接"**——裸 cargo build 缺 `tauri/custom-protocol` feature 导致 release exe 处于 dev 模式加载 devUrl（localhost:1420）；修复：显式启用 custom-protocol（Cargo.toml 注释说明 + 壳文档）；**发行版不含测试数据**（绿色目录/zip 不再打包 data/，AGENTS.md 增硬性条款）；CDP 实测主窗口加载 tauri:// 本地资产 + iframe 显示兰台页面。
 - ✅ 已执行：0.1.21（用户报告后修复，CH-040）：**壳终端按钮遮挡输入区**——终端浮层按钮固定在窗口右下角遮挡兰台"提问"按钮；修复：输入区 `.chat-composer` 右侧留 88px 占位（padding-right），浏览器直开同样留白保持一致。
 - ✅ 已登记：**发布单轨决策（CH-041/R121）**：0.1.22 起只发布 lantai-shell（壳 + 服务一体），不再单独发布服务版目录/zip；壳目录内 lantai.exe 与 `--server` 保留（壳依赖 + 调试直跑入口）；历史双轨（0.1.1~0.1.21）保留可回滚。
+- ✅ 已执行：0.1.22（用户确认整改方案后实施，CH-042）：**v0.1.21 评审整改**——H1 字节切片 panic / H2 keep-alive 端口竞态（高危）；S-M1~S-M7（前台代理、设置透传、失败扫描仅 Boot、白名单收窄 8000、stop 重试、iframe url 更新、下载文件名净化）；文档 M3~M5、L1~L6；**单轨发布首版**。
 - ⏳ **等待用户确认**后再进入后续迭代（RBAC、多平台、Docker、档位 3 等均只入需求与文档）。
 
 ## 会话注意事项

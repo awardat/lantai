@@ -51,6 +51,19 @@ pub fn truncate_term_buffer(buf: &mut String) {
     }
 }
 
+/// 失败特征扫描窗口上限（字节）；超过则保留后半段（RECENT_KEEP）。
+/// H1 修复：按 UTF-8 字符边界截断，避免多字节字符（如中文）切片点落字中 panic。
+const RECENT_MAX: usize = 8192;
+const RECENT_KEEP: usize = 4096;
+
+/// 截断失败特征扫描窗口（保留后半段），按 UTF-8 字符边界截断。
+fn truncate_recent(buf: &mut String) {
+    if buf.len() > RECENT_MAX {
+        let cut = buf.floor_char_boundary(buf.len() - RECENT_KEEP);
+        *buf = buf[cut..].to_string();
+    }
+}
+
 impl AppInner {
     pub fn new(settings: Settings, config_dir: PathBuf) -> Self {
         let url = format!("http://127.0.0.1:{}/", settings.port);
@@ -395,6 +408,10 @@ fn start_session(app: &AppHandle, inner: &Arc<Mutex<AppInner>>, feed: bool) {
         (g.settings.clone(), workdir)
     };
 
+    // S-M1 修复：前台会话同样应用代理环境变量（进程级 set_var，须在 spawn 前调用），
+    // 使 lantai 服务的 httpx 调用（LLM/embedding）走配置代理；此前仅 keep-alive 路径生效。
+    apply_proxy_env(&settings);
+
     // 代次 +1，令旧探针/保活线程失效
     {
         let mut g = inner.lock().unwrap();
@@ -468,10 +485,14 @@ fn start_session(app: &AppHandle, inner: &Arc<Mutex<AppInner>>, feed: bool) {
                     if failed_once {
                         continue;
                     }
-                    recent.push_str(&text);
-                    if recent.len() > 8192 {
-                        recent = recent[recent.len() - 4096..].to_string();
+                    // S-M3 修复：失败特征扫描仅 Boot 阶段启用；Ready 后运行期日志
+                    // 命中 "fatal error"/"npm error" 等不再误切 Failed（运行期异常交给 keepalive/前端日志）
+                    let is_boot = inner2.lock().unwrap().phase == Phase::Boot;
+                    if !is_boot {
+                        continue;
                     }
+                    recent.push_str(&text);
+                    truncate_recent(&mut recent);
                     let lower = recent.to_lowercase();
                     if let Some(p) = FAIL_PATTERNS.iter().find(|p| lower.contains(**p)) {
                         failed_once = true;
@@ -644,12 +665,17 @@ pub fn stop(app: &AppHandle, inner: &Arc<Mutex<AppInner>>) -> Result<(), String>
         }
         g.settings.port
     };
-    // 当前会话树已杀；若端口仍被监听（detached keep-alive 服务），按端口杀
+    // 当前会话树已杀；端口释放是异步的——先短暂等待（S-M5 修复），仍监听才按端口杀 detached
     let mut port_err: Option<String> = None;
-    if port_listening(port) {
-        if let Err(e) = kill_by_port(port) {
-            port_err = Some(e);
+    let wait_deadline = Instant::now() + Duration::from_millis(1200);
+    while port_listening(port) {
+        if Instant::now() >= wait_deadline {
+            if let Err(e) = kill_by_port(port) {
+                port_err = Some(e);
+            }
+            break;
         }
+        std::thread::sleep(Duration::from_millis(100));
     }
     let msg = match &port_err {
         Some(e) => format!("服务已停止，但端口 {port} 仍被监听：{e}"),
@@ -690,6 +716,29 @@ pub fn handle_close(app: &AppHandle) {
         return;
     }
     // 保持后台运行：脱离作业，另起一个独立 cmd 会话
+    // H2 修复：必须先终止前台会话进程树并等待端口释放，再启动 detached；
+    // 否则前台服务仍占端口时 detached 必撞 EADDRINUSE 退出（app.exit 才关 JobObject，时序错）。
+    let state = app.state::<Arc<Mutex<AppInner>>>();
+    let port = { state.lock().unwrap().settings.port };
+    {
+        let mut g = state.lock().unwrap();
+        g.probe_stop.store(true, Ordering::Relaxed);
+        if let Some(mut term) = g.term.take() {
+            term.kill();
+            // JobObject 句柄随 term drop 关闭 → 整树终止前台 cmd/lantai
+        }
+    }
+    // 等待端口释放（前台树终止是异步的），带超时 5s
+    let wait_deadline = Instant::now() + Duration::from_secs(5);
+    while port_listening(port) {
+        if Instant::now() >= wait_deadline {
+            eprintln!("[lantai-shell] keep-alive: port {port} not released in 5s, retry kill_by_port");
+            // 兜底：按端口杀残留
+            let _ = kill_by_port(port);
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(150));
+    }
     let (cmdline, log_path) = {
         let state = app.state::<Arc<Mutex<AppInner>>>();
         let g = state.lock().unwrap();
@@ -767,6 +816,25 @@ mod tests {
     fn truncate_buffer_keeps_small_buffers_untouched() {
         let mut buf = String::from("short");
         truncate_term_buffer(&mut buf);
+        assert_eq!(buf, "short");
+    }
+
+    #[test]
+    fn truncate_recent_respects_utf8_boundaries() {
+        // H1：多字节字符反复填充跨 RECENT_MAX(8192) 边界，不得 panic 且输出合法 UTF-8
+        let mut buf = String::new();
+        for _ in 0..4000 {
+            buf.push_str("测试中文📦 ");
+        }
+        truncate_recent(&mut buf);
+        assert!(buf.len() <= RECENT_MAX);
+        assert!(std::str::from_utf8(buf.as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn truncate_recent_keeps_small_buffers_untouched() {
+        let mut buf = String::from("short");
+        truncate_recent(&mut buf);
         assert_eq!(buf, "short");
     }
 

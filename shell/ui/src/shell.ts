@@ -99,7 +99,6 @@ function fitBootTerm() {
 
 // ---------- 状态 ----------
 let url = "http://127.0.0.1:8000/";
-let loaded = false;
 
 function applyState(p: { phase: string; message?: string; url: string; zoom: number }) {
   url = p.url;
@@ -115,9 +114,8 @@ function applyState(p: { phase: string; message?: string; url: string; zoom: num
     bootMask.hidden = true;
     floatBtn.hidden = false;
     browserBtn.hidden = false;
-    if (!loaded) {
-      loaded = true;
-      frame.src = p.url; // 就绪后 iframe 加载 DSH UI
+    if (frame.src !== p.url) {
+      frame.src = p.url; // S-M6：按 url 变化更新（改端口重启后加载新地址）
     }
   } else if (p.phase === "failed") {
     floatDot.classList.add("err");
@@ -312,18 +310,27 @@ function showSaveTip(text: string) {
 }
 
 document.getElementById("btn-save-settings")!.addEventListener("click", async () => {
+  // S-M2 修复：读取当前设置，未在弹窗展示的字段（autoStart/proxyUrl/useSystemProxy/
+  // terminalHeightRatio/zoom）透传原值，避免 UI 保存静默还原用户手动编辑的 settings.json
+  let current: Settings;
+  try {
+    current = await cmd.getSettings();
+  } catch (e) {
+    console.error("读取设置失败:", e);
+    current = { ...DEFAULT_SETTINGS };
+  }
   const s: Settings = {
-    startupCommand: cfgCommand.value.trim() || DEFAULT_SETTINGS.startupCommand,
+    startupCommand: cfgCommand.value.trim() || current.startupCommand,
     workingDir: cfgWorkdir.value.trim(),
-    port: Math.max(1, Math.min(65535, Number(cfgPort.value) || 8000)),
+    port: Math.max(1, Math.min(65535, Number(cfgPort.value) || current.port)),
     readyTimeoutSec: Math.max(10, Math.min(600, Number(cfgTimeout.value) || 120)),
-    zoom: 1.0,
-    autoStart: true,
+    zoom: current.zoom,
+    autoStart: current.autoStart,
     keepAliveOnExit: cfgKeepalive.checked,
     autoRestart: cfgAutorestart.checked,
-    terminalHeightRatio: DEFAULT_SETTINGS.terminalHeightRatio,
-    useSystemProxy: DEFAULT_SETTINGS.useSystemProxy,
-    proxyUrl: DEFAULT_SETTINGS.proxyUrl,
+    terminalHeightRatio: current.terminalHeightRatio,
+    useSystemProxy: current.useSystemProxy,
+    proxyUrl: current.proxyUrl,
   };
   try {
     await cmd.saveSettings(s);

@@ -75,17 +75,25 @@ pub fn run() {
                 // WebView2 环境参数以首个 webview 为准
                 main_builder = main_builder.additional_browser_args("--remote-debugging-port=9222");
             }
+            // S-M4 修复：导航白名单收窄到配置端口（动态读 settings.port），
+            // 不再放行任意 localhost:* ；本机其他端口的 Web 服务不会获 IPC 权限。
+            // capabilities/default.json 的 remote.urls 静态收窄到 8000 作纵深防御。
+            let inner_nav = inner.clone();
             let main = main_builder
             .on_navigation(move |url| {
                 let host = url.host_str().unwrap_or("").to_string();
                 let scheme = url.scheme().to_string();
                 // 放行：Tauri 本地资产协议（tauri://、http://tauri.localhost）、
-                // 本机兰台服务；其余（外链）交给系统浏览器
+                // data:/about: 占位、本机兰台服务（仅配置端口）；
+                // 其余（外链 / 本机其他端口）交给系统浏览器
+                let configured_port = inner_nav.lock().unwrap().settings.port;
                 let local = scheme == "tauri"
                     || scheme == "data"
                     || scheme == "about"
                     || host == "tauri.localhost"
-                    || (scheme == "http" && (host == "127.0.0.1" || host == "localhost"));
+                    || (scheme == "http"
+                        && (host == "127.0.0.1" || host == "localhost")
+                        && url.port().unwrap_or(0) == configured_port);
                 if local {
                     return true;
                 }
