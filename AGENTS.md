@@ -64,6 +64,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - 每次修复/变更后按版本规则升级版本号（第三段 +1），并同步代码、README、相关文档与 release。
 - **变更实施过程中必要的文本必须保存到文档**（方案/结论/中间记录写入 docs/ 与变更记录，不留存于会话）；实施完成后先交付说明（变更登记、版本同步、自测结论），**不自动构建发布、不自动 git 提交**。
 - **测试后提交前等待确认（CH-049/CH-054）**：变更完成并自测通过后，先登记 CH、同步版本号与文档、完成自测并交付说明；**等待用户明确确认后再 git 提交推送，并随即执行 `scripts/build_release.ps1` 构建发布**（release 目录与 zip），发布后汇报。
+- **GitHub Release 手动发布（CH-055）**：release 构建产物（zip）由用户手动发布到 GitHub Releases（首个 v0.1.30 已建）；agent 不自动创建 GitHub Release。
 
 ## 自测规范（硬性）
 
