@@ -97,8 +97,13 @@ def preview_document(doc_id: int):
         content = filetype.read_text_file(file_path)
         return ok({"type": "text", "doc": _doc_out(doc).model_dump(), "content": content, "format": "plain"})
     if category == "office":
-        content = filetype.parse_docx(file_path)
-        return ok({"type": "text", "doc": _doc_out(doc).model_dump(), "content": content, "format": "plain"})
+        # CH-058/H2：按扩展名分发预览（docx/doc/wps/xls/xlsx/pptx/ppt），
+        # 不再硬编码 parse_docx（非 docx 预览会 500）
+        content = filetype.parse_office(file_path, doc.get("ext", ""))
+        note = ""
+        if not content.strip():
+            note = "（该格式暂无法提取文本（如 .ppt 老版二进制演示文稿），可下载源文件查看）"
+        return ok({"type": "text", "doc": _doc_out(doc).model_dump(), "content": content, "format": "plain", "note": note})
     if category in ("pdf_text", "pdf_image"):
         # 0.1.9：PDF 预览优先用浏览器原生查看器（iframe 加载源文件），文本提取作为降级
         pages = filetype.pdf_text_layers(file_path)

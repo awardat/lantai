@@ -181,6 +181,14 @@ class Store:
         return doc
 
     # ------------------------------------------------------------ 切片与向量
+    def clear_chunks(self, doc_id: int) -> None:
+        """幂等化（CH-058/M4）：删除文档既有切片，供重解析前清理——
+        崩溃恢复重解析（requeue_pending）可能使同一文档切片重复入库。"""
+        with self._lock:
+            with self._connect() as conn:
+                conn.execute("DELETE FROM chunks WHERE document_id=?", (doc_id,))
+                conn.commit()
+
     def add_chunks(self, doc_id: int, texts: list[str], embeddings: np.ndarray) -> int:
         """批量写入切片；embeddings 形状 (n, dim) float32。"""
         rows = [

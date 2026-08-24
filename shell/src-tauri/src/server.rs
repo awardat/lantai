@@ -704,8 +704,11 @@ pub fn handle_close(app: &AppHandle) {
         // 进程退出时 JobObject 自动清理 cmd 进程树
         return;
     }
-    // 询问：保持运行（默认）还是同时结束后台服务
-    if ask_end_service(app) {
+    // 询问：保持运行（默认按钮）还是同时结束后台服务
+    // CH-058/H3：修复分支反转——OkCancelCustom("保持运行","结束服务") 中
+    // 「保持运行」是 OK 位（blocking_show 返回 true），此前 if(true)→kill_by_port
+    // 导致点「保持运行」反而杀服务、点「结束服务」反而保活；现交换：false → 按端口杀。
+    if !ask_end_service(app) {
         // 结束后台服务：detached 进程不在本客户端进程树内，按端口杀
         let port = { app.state::<Arc<Mutex<AppInner>>>().lock().unwrap().settings.port };
         if port_listening(port) {
@@ -780,7 +783,8 @@ pub fn handle_close(app: &AppHandle) {
     }
 }
 
-/// 关闭确认对话框：返回 true = 保持后台运行（默认按钮），false = 同时结束后台服务。
+/// 关闭确认对话框：返回 true = 保持后台运行（默认按钮「保持运行」，OK 位），false = 同时结束后台服务。
+/// 与 handle_close 的分支配合见 CH-058/H3（0.1.32 修复反转后语义与注释一致）。
 /// blocking_show 内部在独立线程运行原生对话框（rfd async），主线程等待回调，无死锁风险。
 fn ask_end_service(app: &AppHandle) -> bool {
     use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};

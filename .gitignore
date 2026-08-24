@@ -14,9 +14,11 @@ scripts/sample_docs/
 # 发布产物
 release/
 dist/
-build/
+build-work-*/
 
-# 构建配置（spec 已入库于 scripts/build/，构建时用 --specpath scripts/build 避免根目录生成）
+# 构建配置（CH-058/M7：build/ 不再整体排除——此前吞掉了 !scripts/build/lantai.spec 否定规则
+# 导致 spec 从未入库；现只排除 scripts/build/build-work-* 工作目录，spec 正常入库）
+scripts/build/build-work-*/
 *.spec
 !scripts/build/lantai.spec
 

@@ -44,10 +44,18 @@ def _worker() -> None:
             _QUEUE.task_done()
 
 
+def _active_workers() -> int:
+    """存活 worker 数（CH-058/H1：退出线程停止后从列表移除，避免缩容后上调失效）。"""
+    with _LOCK:
+        _WORKERS[:] = [t for t in _WORKERS if t.is_alive()]
+        return len(_WORKERS)
+
+
 def ensure_workers() -> None:
     """按当前配置并发数补齐 worker（启动/调整后调用）。"""
     target = concurrency()
     with _LOCK:
+        _WORKERS[:] = [t for t in _WORKERS if t.is_alive()]
         while len(_WORKERS) < target:
             t = threading.Thread(target=_worker, name=f"parse-worker-{len(_WORKERS)}", daemon=True)
             _WORKERS.append(t)
@@ -58,6 +66,7 @@ def set_concurrency(n: int) -> int:
     """动态调整并发数：增加补 worker；减少投入退出哨兵。返回实际并发。"""
     n = max(1, min(MAX_CONCURRENCY, int(n)))
     with _LOCK:
+        _WORKERS[:] = [t for t in _WORKERS if t.is_alive()]
         cur = len(_WORKERS)
         if n > cur:
             for _ in range(n - cur):

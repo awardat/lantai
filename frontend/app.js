@@ -184,7 +184,13 @@ function startPolling() {
     const docs = await api("/api/docs").catch(() => null);
     if (!docs) return;
     renderDocs(docs);
-    refreshParseStatus();
+    // 解析状态仅在「设置 → 解析」Tab 激活且已登录时刷新：
+    // 未登录时调用需会话的 /api/settings/parse 会 401 刷日志（0.1.31，CH-056）；
+    // Tab 显隐由 .stab-body.active 控制（非 .hidden），0.1.32（CH-058/M2）修正判断
+    const parseTabActive = $("#stab-parse").classList.contains("active");
+    if (parseTabActive && localStorage.getItem("lantai_session")) {
+      refreshParseStatus();
+    }
     if (!docs.some((d) => d.status === "parsing" || d.status === "queued")) {
       clearInterval(pollTimer);
       pollTimer = null;

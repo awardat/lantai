@@ -4,7 +4,7 @@
 
 ## 快速开始（绿色便携版）
 
-1. 解压 `release/lantai-shell-0.1.20-windows-x64.zip` 到任意目录（如 `D:\tools\lantai`）；
+1. 解压 `release/lantai-shell-0.1.32-windows-x64.zip` 到任意目录（如 `D:\tools\lantai`）；
 2. 双击 `lantai-shell.exe` 启动——壳在内部自动拉起兰台服务，就绪后显示主界面；
 3. 关闭窗口即退出应用并结束服务（默认行为，可在设置中改为"退出后保持服务运行"）。
 

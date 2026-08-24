@@ -135,6 +135,8 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - ✅ 已执行：0.1.28（用户报告后修复 + 评审整改，CH-050/CH-051）：**拖放上传失效**——wry/WebView2 默认禁用 OS 文件拖放，壳 `.drag_and_drop(true)` 显式开启（CDP 模拟验证前端逻辑正常）；上传数量确认无限制；v0.1.27 评审整改（M1/M2/M3/L1/L2，L3~L6 沿用延后）。
 - ✅ 已执行：0.1.29（0.1.28 拖放修复未生效后继续修复，CH-052）：wry 注册 drag drop handler 时 `SetAllowExternalDrop(false)` 接管拖放、页面收不到 HTML5 drop；修复：保留 `.drag_and_drop(true)` + **`.disable_drag_drop_handler()`**（tauri 官方：Windows 前端用 HTML5 拖放必须禁用该 handler）；E2E 无回归，真机拖放待用户验证。
 - ✅ 已执行：0.1.30（用户提出后实施，CH-053）：**常见办公文档支持**——白名单新增 doc/wps/xls/xlsx/ppt/pptx（office 组）；解析：olefile（doc/wps OLE2 UTF-16LE 段提取）、xlrd（xls）、openpyxl（xlsx）、python-pptx（pptx 文本框/表格/分组）；ppt 无纯 Python 提取（提示）；解析器全容错；Mock 全链路回归通过。
+- ✅ 已执行：0.1.31（用户查日志发现后修复 + 评审整改，CH-056/CH-057）：**未登录时轮询解析状态 401 刷日志**——首页轮询无条件调用需会话的 `/api/settings/parse`；修复：仅「设置→解析」Tab 可见且已登录时刷新；实测未登录轮询 0 次 401；v0.1.31 评审整改（L1 技术对接方案分类表/技术栈、L2 API 白名单/错误示例、L3 README 用途、L4 测试方案 TC-021b~d，0 代码 bug）。
+- ✅ 已执行：0.1.32（用户确认 Ox 全量审核整改，CH-058）：H1 并发缩容后上调失效、H2 Office 预览必 500、H3 壳关闭对话框分支反转、H4 发布脚本陈旧默认版本（必填+断言）；M7 spec 入库、M8 zip 校验加强、M2 Tab 判断修正、M4 解析幂等；D1~D3/L15/L16 文档同步；M1/M3/M5/M6、L1~L14 延后。
 - ⏳ **等待用户确认**后再进入后续迭代（RBAC、多平台、Docker、档位 3 等均只入需求与文档）。
 
 ## 会话注意事项

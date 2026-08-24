@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 |------|------|
 | 产品名称 | 兰台（lantai）本地 RAG 知识库 |
-| 文档版本 | V1.28（对应应用 0.1.30） |
+| 文档版本 | V1.30（对应应用 0.1.32） |
 | 生成时间 | 2026-08-23 |
 | 数据来源 | 技术对接方案.md、PRD产品需求文档.md（§6）、数据库设计文档.md |
 | 适用范围 | 前端调用与外部程序集成（API token） |
@@ -59,7 +59,7 @@
 
 | 参数 | 说明 |
 |------|------|
-| file | 文件；白名单：`.txt .md .pdf .docx .png .jpg .jpeg .webp .bmp .gif`；≤20MB |
+| file | 文件；白名单（0.1.30 扩展）：`.txt .md .pdf .docx .doc .wps .xls .xlsx .ppt .pptx .png .jpg .jpeg .webp .bmp .gif`；≤20MB |
 
 **请求示例**：
 
@@ -83,7 +83,7 @@ curl -F "file=@./兰台简介.txt" http://127.0.0.1:8000/api/docs/upload
 
 > **文档状态机（0.1.18 起）**：`queued`（排队中）→ `parsing`（解析中）→ `ready`（已就绪）／`failed`（失败，error 含原因）；服务重启自动恢复排队/解析中的文档重新入队。解析并发默认 10，可在设置「解析」调整（1~50，即时生效）。
 
-**错误示例**：`415` `{"code":415,"message":"不支持的文件类型（.exe）。支持：txt / md / pdf / docx / 图片（png、jpg、jpeg、webp、bmp、gif）。","data":null}`
+**错误示例**：`415` `{"code":415,"message":"不支持的文件类型（.exe）。支持：txt / md / pdf / docx / doc / wps / xls / xlsx / ppt / pptx / 图片（png、jpg、jpeg、webp、bmp、gif）。","data":null}`
 
 ### 2.2 文档列表
 
@@ -103,11 +103,11 @@ curl -F "file=@./兰台简介.txt" http://127.0.0.1:8000/api/docs/upload
 
 | 字段 | 说明 |
 |------|------|
-| type | `text`（txt/md/docx/pdf 渲染文本）或 `image`（图片类） |
+| type | `text`（txt/md/office 渲染文本）、`pdf`（浏览器原生查看器，含 note/raw_url）、`image`（图片类） |
 | doc | DocumentOut |
 | content | 渲染文本（image 类无此字段） |
-| note | 可选说明（如扫描件 PDF 无文本层提示） |
-| raw_url | image 类的源文件直出地址 |
+| note | 可选说明（如扫描件 PDF 无文本层、.ppt 无法提取文本） |
+| raw_url | image/pdf 类的源文件直出地址 |
 
 **示例**：
 
@@ -209,6 +209,7 @@ data: {"type": "done"}
 |------|------|------|
 | `/api/conversations` | POST | body `{"title": "新对话"}` → 创建会话 |
 | `/api/conversations` | GET | 会话列表（按更新时间倒序） |
+| `/api/conversations/{id}` | PUT | 重命名会话（0.1.6，body `{"title": "新标题"}`） |
 | `/api/conversations/{id}/messages` | GET | 会话消息列表（role: user/assistant） |
 | `/api/conversations/{id}` | DELETE | 删除会话（级联消息） |
 
@@ -307,7 +308,7 @@ data: {"type": "done"}
 ```json
 {
   "code": 0, "message": "ok",
-  "data": {"version": "0.1.30", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
+  "data": {"version": "0.1.32", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
 }
 ```
 
@@ -406,7 +407,7 @@ with httpx.Client(base_url="http://127.0.0.1:8000") as c:
 
 ---
 
-**文档状态**: API 说明 V1.28（与应用 0.1.30 同步）
+**文档状态**: API 说明 V1.30（与应用 0.1.32 同步）
 **生成时间**: 2026-08-23
 **前置文档**: 技术对接方案.md、PRD产品需求文档.md、数据库设计文档.md
 **变更规则**: 接口变更时本文件随版本同步更新（0.1.1 → 0.1.2 → …）

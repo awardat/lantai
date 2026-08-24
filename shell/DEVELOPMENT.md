@@ -28,7 +28,7 @@ cargo build --release
 
 ## 版本号约定
 
-每次功能改动版本号第三段 +1（当前 0.1.20，与兰台本体同版本体系）。同步修改三处：
+每次功能改动版本号第三段 +1（当前 0.1.32，与兰台本体同版本体系）。同步修改三处：
 `src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`、`package.json`（另：README「更新记录」、本文件、方案.md）。
 
 ## 构建绿色便携目录（发布）

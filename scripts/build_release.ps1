@@ -1,12 +1,32 @@
 # 兰台单轨发布脚本（0.1.22 起，CH-041/CH-044）
-# 用法：pwsh scripts/build_release.ps1 [-Version 0.1.24]
+# 用法：pwsh scripts/build_release.ps1 -Version 0.1.32
 # 流程：PyInstaller 服务 one-dir（临时目录）→ 布局修正 → 组装壳目录 → 清理中间产物
 #       → zip → 发行物校验（无 data/、无 settings.json、无服务版目录残留）
 # 前置：shell 已 cargo build --release（壳 exe 在 shell/src-tauri/target/release/）
-param([string]$Version = "0.1.23")
+# CH-058/H4：-Version 必填（防无参误删旧产物并用陈旧版本错标重建），并与三处版本号一致性断言
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$Version
+)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+
+# 0. 版本一致性断言：config.py / Cargo.toml / tauri.conf.json 必须与 -Version 一致
+function Get-VersionFrom([string]$file, [string]$pattern) {
+    $m = Select-String -Path $file -Pattern $pattern -ErrorAction Stop | Select-Object -First 1
+    if ($m -and $m.Matches.Count -gt 0) { return $m.Matches[0].Groups[1].Value }
+    return ""
+}
+$cfgVer = Get-VersionFrom (Join-Path $root "backend\app\config.py") 'APP_VERSION = "([\d.]+)"'
+$cargoVer = Get-VersionFrom (Join-Path $root "shell\src-tauri\Cargo.toml") '^version = "([\d.]+)"'
+$tauriVer = Get-VersionFrom (Join-Path $root "shell\src-tauri\tauri.conf.json") '"version": "([\d.]+)"'
+foreach ($pair in @(@("config.py", $cfgVer), @("Cargo.toml", $cargoVer), @("tauri.conf.json", $tauriVer))) {
+    if ($pair[1] -ne $Version) {
+        throw "版本不一致：-Version=$Version 但 $($pair[0]) = $($pair[1])（请先同步版本号）"
+    }
+}
+
 $tmpSvc = Join-Path $env:TEMP "lantai-svc-$Version"      # 服务 one-dir 临时目录
 $svcOut = Join-Path $root "release\lantai-$Version-windows-x64"  # 中间目录（构建后即删）
 $dst = Join-Path $root "release\lantai-shell-$Version-windows-x64"
@@ -63,11 +83,16 @@ Remove-Item (Join-Path $root "scripts\build\build-work-$Version") -Recurse -Forc
 Write-Host "[4/6] 打包 zip..."
 Compress-Archive -Path $dst -DestinationPath $zip -Force
 
-# 8. 发行物校验（硬性条款：无 data/、无 settings.json、无服务版目录）
+# 8. 发行物校验（硬性条款：无 data/、无 logs/、无 rag.db、无 settings.json、无服务版目录）
+# CH-058/M8：条目名分隔符归一化（PS 5.1 Compress-Archive 用反斜杠，/data/ 可能漏检），
+# 模式覆盖 data/logs 目录与根级 rag.db
 Write-Host "[5/6] 发行物校验..."
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $z = [System.IO.Compression.ZipFile]::OpenRead($zip)
-$bad = $z.Entries | Where-Object { $_.FullName -match '/data/|settings\.json' }
+$bad = $z.Entries | Where-Object {
+    $n = $_.FullName -replace '\\', '/'
+    $n -match '(^|/)(data|logs)(/|$)' -or $n -match '(^|/)rag\.db$' -or $n -match '(^|/)settings\.json$'
+}
 $z.Dispose()
 if ($bad) { throw "!! zip 含残留: $($bad.FullName -join ',')" }
 if (Test-Path $svcOut) { throw "!! 服务版目录残留: $svcOut" }

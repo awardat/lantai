@@ -148,6 +148,8 @@ def process_document(doc_id: int) -> None:
 
         emb_cfg = AiItem(**st.get_ai_config()["embedding"])
         emb = embeddings.embed_texts(emb_cfg, chunks)
+        # 幂等（CH-058/M4）：重解析前清理旧切片，防崩溃恢复后同一文档切片重复入库
+        st.clear_chunks(doc_id)
         count = st.add_chunks(doc_id, chunks, emb)
         st.set_document_status(doc_id, "ready", chunk_count=count)
     except Exception as exc:  # noqa: BLE001
