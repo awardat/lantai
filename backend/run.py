@@ -27,16 +27,21 @@ def main() -> None:
         action="store_true",
         help="服务模式：不自动打开浏览器（供桌面壳 lantai-shell 无窗口拉起）",
     )
+    parser.add_argument(
+        "--host",
+        default=config.DEFAULT_HOST,
+        help=f"监听地址（默认 {config.DEFAULT_HOST}，仅本机回环；远程/局域网访问测试可传 0.0.0.0）",
+    )
     args = parser.parse_args()
 
-    url = f"http://{config.DEFAULT_HOST}:{config.DEFAULT_PORT}"
+    url = f"http://{args.host}:{config.DEFAULT_PORT}"
     if not args.server:
         threading.Timer(1.5, lambda: webbrowser.open(url)).start()
         print(f"兰台（lantai）v{config.APP_VERSION} 启动中：{url} （Ctrl+C 退出）")
     else:
         print(f"兰台（lantai）v{config.APP_VERSION} 服务已就绪：{url} （--server 模式）")
     # 直接传应用对象：冻结（PyInstaller）环境下字符串导入不可靠
-    uvicorn.run(fastapi_app, host=config.DEFAULT_HOST, port=config.DEFAULT_PORT, log_level="info")
+    uvicorn.run(fastapi_app, host=args.host, port=config.DEFAULT_PORT, log_level="info")
 
 
 if __name__ == "__main__":

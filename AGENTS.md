@@ -126,6 +126,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - ✅ 已执行：0.1.24（用户提出后实施，CH-045）：**README 首次使用引导完善 + MIT 许可证**——「首次使用三步」补智能体配置明细（7 组模型用途/默认值/必须项）；新增 LICENSE（MIT，开放不限制），发布物随附；项目已推送 GitHub（https://github.com/awardat/lantai，公开，main 分支）。
 - ✅ 已执行：0.1.25（用户报告后修复，CH-046）：**壳内会话 cookie 丢失**——壳 iframe 跨站上下文 SameSite=Lax cookie 被 WebView2 拒绝；修复：**双通道会话**（verify 返回 session token + localStorage + `X-Lantai-Session` 请求头；后端 header 优先、cookie 兼容）；CDP 实测壳内登录全链路通过。
 - ✅ 已执行：0.1.26（用户报告后修复，CH-047）：**Token 复制失败**——壳内跨站 iframe 中 navigator.clipboard 受 Permissions Policy 限制；修复：前端复制降级链（execCommand 兜底）+ 壳自动允许 CLIPBOARD_READ_WRITE 权限。
+- ✅ 已执行：0.1.27（用户提出后实施，CH-048）：**监听地址参数化**——`run.py` 新增 `--host`（默认 127.0.0.1 不变），远程/局域网访问测试 `lantai.exe --host 0.0.0.0` 即可，无需改代码重打包。
 - ⏳ **等待用户确认**后再进入后续迭代（RBAC、多平台、Docker、档位 3 等均只入需求与文档）。
 
 ## 会话注意事项
