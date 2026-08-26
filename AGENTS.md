@@ -84,6 +84,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 6. **真实样本**：sample/ 两个 PDF 的解析（分类/顺序/OCR）与预览（原生渲染）
 7. **前端静态检查**：新页面元素/交互逻辑在打包资源中存在（grep 验证）
 8. **关键响应行为**：响应头（如 Content-Disposition: inline）、SSE 事件序列（sources→delta→done）
+9. **分类表核对（0.1.38 审核 M1 教训，CH-074）**：技术对接方案 §4.3 分类表/风险对策表/注释必须反映本期新机制（落地状态而非"评估/备选"表述），杜绝机制行漏补（曾连续多轮漏网）
 
 ### 3. 历史教训条款（防止重蹈覆辙）
 - 批量文本替换后**必须语法检查 + 应用导入验证**（教训：H1 `_ocr_pdf` doc_id NameError）
@@ -143,6 +144,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - ✅ 已执行：0.1.35（用户确认 Ox-v0.1.34 评审整改，CH-062）：L1 上传 415 文案由 `ALLOWED_EXTS` 动态生成（补 6 种 office 扩展名）；L4 retry"校验+置 queued"合并 store 层原子条件 UPDATE（并发重试不双入队）；D1~D3 文档同步（技术对接方案 §6.1/测试方案 TC-125~127/README 功能一览）；L2/L3（Cargo.lock、requirements 注释头）按 CH-061 规则不计评审项，随版本同步义务刷新；流程固化：**文档同步须在等待提交前完成**（CH-062）。
 - ✅ 已执行：0.1.36（用户提出后实施，CH-063）：**失败文件手动指定文件类型重试**——失败行新增类型下拉（按原类型 + 全白名单扩展名），`POST /api/docs/{id}/retry` 可选 body `{"ext":".docx"}`（白名单校验、自动更新 ext/category 后按新类型重新解析；不传行为不变）；实测伪装 .ppt（实为 docx）→ 指定 .docx → 解析成功。
 - ✅ 已执行：0.1.37（用户确认四项合并修复 + 文件计数/审核整改，CH-064~068）：**① CH-064** 壳终端标题版本号未同步——`build_release.ps1` 内置壳 release 构建（[1/7] cargo build --release，不再依赖手工前置），发布物壳 exe 版本始终同步；**② CH-065** 失败重试类型下拉改为**文件大类**（文本/Office/文字 PDF/图片 PDF·OCR/图片），识别问题手工兜底，retry 可选 body `{"category":...}`（与 ext 互斥，大类联动扩展名 pdf→.pdf、image→.png、text→.txt）；**③ CH-066** 视觉 400"仅支持 jpg\bmp\webp\gif\png"——GBT 20519 PDF 内嵌 23 张 TIFF 所致，发送前 Pillow 探测并按需统一转码 JPEG（`normalize_image_for_vision`，覆盖 OCR/图片描述/页内图三处）；**④ CH-067** agent 日志失败分支改记 `_friendly_error`（含上游响应体前 200 字符，非 httpx 通用文案）；**⑤ CH-068** 文件管理筛选按钮实时显示各状态文件数（全部/已就绪/排队中/解析中/失败，轮询联动）+ 审核报告 v0.1.37 L1 整改（技术对接方案补 MiMo/TIFF 转码/category 大类）。
+- ✅ 已执行：0.1.38（用户确认五项一并做，CH-069~073 + 审核整改 CH-074）：**① CH-071 Dify 外部知识库 API**——新增 `POST /api/external/retrieval`（Dify External Knowledge API 协议：Bearer 鉴权复用设置页 API token、`{knowledge_id,query,retrieval_setting}` → `{records:[{content,score,title,metadata}]}`、knowledge_id 暂不细分、检索复用 `retriever.retrieve`）；**② CH-070 矢量 PDF 整页渲染 OCR 兜底（pymupdf，R110 落地）**——`pdf_render_page_images` 整页渲染 PNG，`_ocr_pdf` 位图 0 时回退（矢量描摹 PDF 商用密码条例实测解析成功，GBT TIFF 路径回归不变）；**③ CH-069 渲染也失败时明确提示**"该 PDF 无内嵌位图且无法整页渲染…请提供位图版文件"；**④ CH-072 pdfminer 打开非标 xref PDF 失败回退 pypdf**——`pdf_text_layers` 捕获异常（国办发 2014 6号 PDF 曾预览 500"No /Root object!"）→ pypdf 逐页提取，解析 ready + 预览 200；**⑤ CH-073 OCR 扫描件文本层字间空格规整（方案 A）**——`chunker.clean_ocr_spacing` 删 CJK 字间空格/换行碎片（英文间距保留），接入入库归一与 pdf_text_layers 全部产出，国办发 PDF 入库/预览零残留；**⑥ CH-074 v0.1.38 审核整改**——技术对接 §4.3/:153/:335 改"整页渲染已落地"口径并补三行机制、`_pypdf_page_text` reader 复用（L1）、AGENTS 自测清单固化"分类表核对"；requirements 新增 `pymupdf>=1.28`。
 - ⏳ **等待用户确认**后再进入后续迭代（RBAC、多平台、Docker、档位 3 等均只入需求与文档）。
 
 ## 会话注意事项

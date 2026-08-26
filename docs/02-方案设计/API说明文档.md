@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 |------|------|
 | 产品名称 | 兰台（lantai）本地 RAG 知识库 |
-| 文档版本 | V1.35（对应应用 0.1.37） |
+| 文档版本 | V1.36（对应应用 0.1.38） |
 | 生成时间 | 2026-08-23 |
 | 数据来源 | 技术对接方案.md、PRD产品需求文档.md（§6）、数据库设计文档.md |
 | 适用范围 | 前端调用与外部程序集成（API token） |
@@ -109,6 +109,48 @@ curl -F "file=@./兰台简介.txt" http://127.0.0.1:8000/api/docs/upload
 | `category` | 指定文件大类（0.1.37，识别问题手工兜底）：枚举 `text / office / pdf_text / pdf_image / image`，非法值 400 `不支持的文件大类：<值>（可选：text / office / pdf_text / pdf_image / image）`；**大类联动扩展名**——pdf_text/pdf_image→`.pdf`、image→`.png`、text→`.txt`（已是 txt/md 保持）、office→保持原扩展名 | `{"category":"pdf_image"}` |
 
 不传 body → 按原类型重试（行为不变）。示例：扫描件被误判为文字 PDF → 解析失败 → `POST /api/docs/{id}/retry {"category":"pdf_image"}` → 按 OCR 通道重新解析。
+
+### 2.4c Dify 外部知识库检索（V1.36 新增，0.1.38，CH-071）
+
+> 实现 [Dify External Knowledge API](https://docs.dify.ai/zh/self-host/use-dify/knowledge/external-knowledge-api) 协议，供 Dify 以外部知识库方式调用兰台检索。
+
+`POST /api/external/retrieval`，`Authorization: Bearer <API token>`（兰台设置页生成的 API token；无效/吊销返回 401）。
+
+**请求体**：
+
+| 字段 | 必填 | 说明 |
+|------|:---:|------|
+| `knowledge_id` | 是 | 外部知识库 ID（当前版本不细分，检索全部就绪文档；保留字段供后续路由扩展） |
+| `query` | 是 | 检索问题 |
+| `retrieval_setting` | 是 | `{top_k: int(1~100，上限受 MAX_TOP_K=20 截断), score_threshold: float(0~1，命中过滤)}` |
+| `metadata_condition` | 否 | 暂不处理（忽略） |
+
+错误：400（参数）、401（鉴权）、502（检索故障，如 embedding 服务不可用）。
+
+**响应**：`{"records": [{"content", "score", "title", "metadata"}]}`（records 为空数组表示无命中）：
+
+```json
+{
+  "records": [
+    {
+      "content": "……切片文本……",
+      "score": 0.81,
+      "title": "会议纪要.docx",
+      "metadata": {"doc_id": 12, "category": "office"}
+    }
+  ]
+}
+```
+
+**请求示例**：
+
+```json
+{
+  "knowledge_id": "lantai",
+  "query": "兰台是什么",
+  "retrieval_setting": {"top_k": 3, "score_threshold": 0.5}
+}
+```
 
 ### 2.5 预览源文件（文本）
 
@@ -321,7 +363,7 @@ data: {"type": "done"}
 ```json
 {
   "code": 0, "message": "ok",
-  "data": {"version": "0.1.37", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
+  "data": {"version": "0.1.38", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
 }
 ```
 
@@ -420,7 +462,7 @@ with httpx.Client(base_url="http://127.0.0.1:8000") as c:
 
 ---
 
-**文档状态**: API 说明 V1.35（与应用 0.1.37 同步）
+**文档状态**: API 说明 V1.36（与应用 0.1.38 同步）
 **生成时间**: 2026-08-23
 **前置文档**: 技术对接方案.md、PRD产品需求文档.md、数据库设计文档.md
 **变更规则**: 接口变更时本文件随版本同步更新（0.1.1 → 0.1.2 → …）

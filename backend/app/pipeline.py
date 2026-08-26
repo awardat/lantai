@@ -115,11 +115,20 @@ def _ocr_pdf_pages(file_path: Path, st: Store, page_nos: list[int], doc_id: int 
 
 
 def _ocr_pdf(file_path: Path, st: Store, doc_id: int | None = None) -> str:
-    """扫描件 PDF：逐页提取图片 → OCR 模型识别（H1 修复：补 doc_id 参数）。"""
+    """扫描件 PDF：逐页提取图片 → OCR 模型识别（H1 修复：补 doc_id 参数）。
+
+    0.1.38（CH-070/CH-069）：无内嵌位图（矢量描摹/混合 PDF）时回退 pymupdf
+    整页渲染 PNG 走同一 OCR 通道；渲染也失败则给出明确提示，不再笼统报"未能提取文本"。
+    """
     cfg = st.get_ai_config()["pdf_image"]
     images = filetype.pdf_extract_page_images(file_path)
     if not images:
-        raise RuntimeError("未能从 PDF 中提取到页面图片，请确认文件内容为扫描图片。")
+        images = filetype.pdf_render_page_images(file_path)
+    if not images:
+        raise RuntimeError(
+            "该 PDF 无内嵌位图且无法整页渲染（可能是矢量描摹或空白页），"
+            "无法执行 OCR，请提供位图版文件。"
+        )
     parts = []
     for page_no, data, mime in images:
         text = _vision_describe(cfg, data, mime, "请识别图片中的全部文字，保持原文顺序。", slot="pdf_image", doc_id=doc_id)

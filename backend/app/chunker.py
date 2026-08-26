@@ -7,13 +7,33 @@ from . import config
 
 _SPACE_RE = re.compile(r"[ \t\r\f\v]+")
 _BLANK_LINE_RE = re.compile(r"\n\s*\n")
+# 中日韩统一表意文字/扩展区/兼容区（含假名时排除——仅汉字之间删空格，
+# 假名/英文单词间距保留；0.1.38 CH-073 方案 A）
+_CJK_GAP_RE = re.compile(
+    r"([\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff])\s+([\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff])"
+)
+
+
+def clean_ocr_spacing(text: str) -> str:
+    """清理 OCR 文本层字间空白（0.1.38，CH-073 方案 A）：
+    删除 CJK 汉字之间的空格/换行碎片（OCR 文本层常见缺陷："国 务 院"→"国务院"、
+    单字分组换行合并）；英文单词间空格与中英之间空格不受影响。
+    循环替换直至无 CJK 间空隙（空白可能被前一次替换后的相邻汉字暴露）。
+    """
+    if not text:
+        return text
+    prev = None
+    while prev != text:
+        prev = text
+        text = _CJK_GAP_RE.sub(r"\1\2", text)
+    return text
 
 
 def _normalize(text: str) -> str:
-    """规整空白：合并行内连续空格，保留换行。"""
+    """规整空白：合并行内连续空格，保留换行；再清理 CJK 间空格碎片（0.1.38 CH-073）。"""
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     lines = [_SPACE_RE.sub(" ", ln).strip() for ln in text.split("\n")]
-    return "\n".join(lines).strip()
+    return clean_ocr_spacing("\n".join(lines)).strip()
 
 
 def chunk_text(text: str, chunk_size: int = config.CHUNK_SIZE, overlap: int = config.CHUNK_OVERLAP) -> list[str]:

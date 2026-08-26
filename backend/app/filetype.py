@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Optional
 
 from . import config
+from .chunker import clean_ocr_spacing  # 0.1.38 CH-073：OCR 文本层字间空格清理（预览/入库一致）
 
 _SAFE_RE = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
 
@@ -265,10 +266,12 @@ def pdf_is_pseudo_text(path: Path) -> bool:
     return len(full) >= config.PDF_TEXT_MIN_CHARS and text_readability(full) < READABILITY_THRESHOLD
 
 
-def _pypdf_page_text(path: Path, page_index: int) -> str:
-    from pypdf import PdfReader
+def _pypdf_page_text(path: Path, page_index: int, reader=None) -> str:
+    """pypdf 单页文本；reader 可复用（0.1.38 审核 L1：避免 N 页 N 次全文解析）。"""
+    if reader is None:
+        from pypdf import PdfReader
 
-    reader = PdfReader(str(path))
+        reader = PdfReader(str(path))
     if page_index >= len(reader.pages):
         return ""
     try:
@@ -291,10 +294,30 @@ def pdf_text_layers(path: Path) -> list[tuple[str, bool]]:
     from pdfminer.high_level import extract_pages
     from pdfminer.layout import LTTextLineHorizontal, LTTextContainer
 
+    # 0.1.38（CH-072）：pdfminer 打开失败（startxref/xref 非标，如"国办发2014 6号"
+    # 通知 PDF 抛 PDFSyntaxError "No /Root object!"——阅读器/pypdf 均可打开）→
+    # 回退 pypdf 逐页提取，不再让预览/解析 500
+    try:
+        page_layouts = list(extract_pages(str(path)))
+    except Exception:  # noqa: BLE001
+        from pypdf import PdfReader
+
+        reader = PdfReader(str(path))
+        out: list[tuple[str, bool]] = []
+        for idx in range(len(reader.pages)):
+            # 0.1.38（CH-073）：回退分支同样清理 OCR 字间空格（预览/入库一致）；
+            # 复用 reader（审核 L1：避免每页重开全文解析）
+            t = clean_ocr_spacing(_pypdf_page_text(path, idx, reader)).strip()
+            if len(t) >= config.PDF_TEXT_MIN_CHARS and text_readability(t) >= READABILITY_THRESHOLD:
+                out.append((t, True))
+            else:
+                out.append(("", False))
+        return out
+
     page_lines: list[list[tuple[str, float, float, float, float]]] = []
     all_lines: list[str] = []
     heights: list[float] = []
-    for page_layout in extract_pages(str(path)):
+    for page_layout in page_layouts:
         lines: list[tuple[str, float, float, float, float]] = []
         for el in page_layout:
             if not isinstance(el, LTTextContainer):
@@ -311,14 +334,20 @@ def pdf_text_layers(path: Path) -> list[tuple[str, bool]]:
     repeated = {t for t, c in Counter(all_lines).items() if c >= 3}
 
     pages_out: list[tuple[str, bool]] = []
+    pypdf_reader = None  # 审核 L1：主路径 fallback 复用单个 reader，避免每页全文解析
     for idx, (lines, height) in enumerate(zip(page_lines, heights)):
         ordered = _layout_order(lines, height, repeated)
-        text = "\n".join(ordered).strip()
+        # 0.1.38（CH-073 方案 A）：OCR 文本层字间空格/换行碎片清理（预览与入库一致）
+        text = clean_ocr_spacing("\n".join(ordered)).strip()
         if len(text) >= config.PDF_TEXT_MIN_CHARS and text_readability(text) >= READABILITY_THRESHOLD:
             pages_out.append((text, True))
             continue
         # 双引擎兜底：pdfminer 空/不可读 → 尝试 pypdf（0.1.16）
-        fallback = _pypdf_page_text(path, idx).strip()
+        if pypdf_reader is None:
+            from pypdf import PdfReader
+
+            pypdf_reader = PdfReader(str(path))
+        fallback = clean_ocr_spacing(_pypdf_page_text(path, idx, pypdf_reader)).strip()
         if len(fallback) >= config.PDF_TEXT_MIN_CHARS and text_readability(fallback) >= READABILITY_THRESHOLD:
             pages_out.append((fallback, True))
         else:
@@ -395,6 +424,25 @@ def mime_of(ext: str) -> str:
 
 # 视觉供应商通用支持格式（MiMo/通义/OpenAI 等均支持；超出即 400 拒绝）
 _VISION_OK_FORMATS = {"JPEG", "PNG", "BMP", "WEBP", "GIF"}
+
+
+def pdf_render_page_images(path: Path, zoom: float = 2.0) -> list[tuple[int, bytes, str]]:
+    """pymupdf 整页渲染为 PNG（0.1.38，CH-070）：用于无内嵌位图的矢量描摹/混合 PDF，
+    作为 OCR 通道兜底（R110 整页渲染评估项落地）。返回 [(页码, PNG 字节, image/png)]。
+
+    依赖 pymupdf（见 requirements；Python 3.14 用 cp310-abi3 wheel）。
+    """
+    import pymupdf  # 新版 API（fitz 已弃用）
+
+    doc = pymupdf.open(str(path))
+    out: list[tuple[int, bytes, str]] = []
+    try:
+        for i, page in enumerate(doc, 1):
+            pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom))
+            out.append((i, pix.tobytes("png"), "image/png"))
+    finally:
+        doc.close()
+    return out
 
 
 def normalize_image_for_vision(data: bytes, mime: str) -> tuple[bytes, str]:
