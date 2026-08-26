@@ -1,6 +1,6 @@
 # 兰台（lantai）· 本地 RAG 知识库
 
-> 版本 **0.1.38** ｜ 平台 **Windows x64**（MVP）｜ 单机部署 ｜ 无构建步骤，两步启动
+> 版本 **0.1.39** ｜ 平台 **Windows x64**（MVP）｜ 单机部署 ｜ 无构建步骤，两步启动
 
 ## 起名意境
 
@@ -20,11 +20,12 @@
 
 适合：个人知识管理、本地资料问答演示、企业内网离线知识库原型。
 
-## 功能一览（v0.1.38）
+## 功能一览（v0.1.39）
 
 | 模块 | 功能 |
 |------|------|
 | 文档管理 | 上传（≤20MB）、解析状态（**文件计数 + 状态筛选联动**）、文档列表、**失败原因悬停 + 失败重试（可指定文件大类兜底）**、删除（连同向量与源文件） |
+| 检索增强 | **混合检索（BM25 关键词 + 向量语义，RRF 融合）**；embedding 不可用时自动降级关键词检索；**可选交叉编码器重排**（设置页「重排」开启） |
 | 知识问答 | 提问 → top-k 检索 → AI 生成答案；展示相似度分数、引用来源、源文件预览 |
 | **外部集成** | **Dify 外部知识库**：`POST /api/external/retrieval` 实现 Dify External Knowledge API 协议（Bearer 鉴权复用 API token） |
 | 文件类型 AI | 五类文件各自配置 provider / 模型 / 提示词；问答与 embedding 全局配置 |
@@ -70,8 +71,10 @@ ollama pull llava:7b                            # 图片理解模型（可选；
 | 图片理解 | 图片（视觉描述入库） | `qwen2.5vl:7b`（或 `llava:7b`） | 通义 `qwen-vl-plus` ｜ 智谱 `glm-4v-plus` ｜ 小米 MiMo `mimo-v2.5-pro` ｜ 硅基流动 `Qwen/Qwen2.5-VL-7B-Instruct` |
 | OCR | 图片 PDF（扫描件识别） | `qwen2.5vl:7b`（或 `llava:7b`） | 通义 `qwen-vl-plus` ｜ 智谱 `glm-4v-plus` |
 | 向量化 | embedding（全局，所有文件入库） | `bge-m3` | 通义 `text-embedding-v3` ｜ 硅基流动 `BAAI/bge-m3` |
+| 重排（可选） | 检索结果精排（设置页「重排」开启后生效） | （Rerank 系模型，Ollama 支持有限） | **硅基流动 `BAAI/bge-reranker-v2-m3`（首选，多语言效果好，与 bge-m3 同族）** ｜ `Qwen/Qwen3-Reranker-0.6B`（更轻更快） ｜ 通义 `qwen-rerank` 等 |
 
 > **提示**：DeepSeek、Kimi、小米 MiMo 官方 API **无 embedding 接口**，向量化请选通义 / 硅基流动 / 本地 `bge-m3`。
+> **重排（可选增强）**：默认关闭（系统为 BM25+向量混合检索）。启用需配置 rerank 模型（如硅基流动，Base URL `https://api.siliconflow.cn/v1`，模型 `BAAI/bge-reranker-v2-m3`），勾选「启用重排」即对检索候选精排；重排服务不可用时自动回退混合检索，不影响问答。
 > 设置页「AI 配置」的**供应商下拉**已预置以上供应商与 Base URL（Ollama、DeepSeek、OpenCode Go、通义、智谱、Kimi、小米 MiMo、硅基流动、OpenAI），选择后自动填充推荐模型，可手动修改；填入 API Key 后点击**「测试」**可验证连通性并获取模型清单（点击模型名自动填入）。
 
 ## 用法
@@ -104,7 +107,7 @@ python -m uvicorn app.main:app --port 8000
 
 ### 首次使用三步
 
-1. **配置智能体（AI）**：点右上角**设置图标** → 输入默认密码 `Admin#123` → 「AI 配置」Tab。这里共 7 组模型，每项可选择 Ollama（本地）或 OpenAI 兼容云端（DeepSeek / 通义 / 智谱 / Kimi / 硅基流动 / OpenAI），默认指向本机 Ollama（`http://127.0.0.1:11434`），输入框焦点离开即自动保存，修改立即生效：
+1. **配置智能体（AI）**：点右上角**设置图标** → 输入默认密码 `Admin#123` → 「AI 配置」Tab。这里共 8 组模型（7 组处理模型 + 可选重排），每项可选择 Ollama（本地）或 OpenAI 兼容云端（DeepSeek / 通义 / 智谱 / Kimi / 硅基流动 / OpenAI），默认指向本机 Ollama（`http://127.0.0.1:11434`），输入框焦点离开即自动保存，修改立即生效：
 
    | 模型组 | 用途 | 默认（Ollama） | 备注 |
    |--------|------|----------------|------|
@@ -112,6 +115,7 @@ python -m uvicorn app.main:app --port 8000
    | **向量化模型**（embedding） | 文档入库时生成向量 | `bge-m3` | **必须配置，否则文档无法入库**（DeepSeek 官方无 embedding 接口，云端请用通义/硅基流动） |
    | 文字文档 / Office / 文字 PDF | 文本类解析 | `qwen2.5:7b` | 三类可各自独立配置 |
    | 图片 / 图片 PDF·OCR | 视觉理解与扫描件识别 | `llava:7b` | 需要视觉模型（如 `qwen2.5vl:7b`） |
+   | **重排（rerank，可选）** | 检索结果精排（增强问答相关性） | 关闭 | **默认不启用**；需要时填 rerank 模型（推荐硅基流动 `BAAI/bge-reranker-v2-m3`，Base URL `https://api.siliconflow.cn/v1`）并勾选「启用重排」 |
 
    填好每组后点「**测试**」可验证连通性并获取模型清单（点击模型名自动填入）；云端服务需先在「API Token」或对应卡片填入 API Key。完成后回到首页。
 
@@ -123,7 +127,7 @@ python -m uvicorn app.main:app --port 8000
 - 版本规则：首个版本 **0.1.1**，每次变更**第三段 +1**（0.1.1 → 0.1.2 → …）。
 - **各版本号与修改内容见 `docs/03-增长迭代/版本记录.md`**（不在此罗列）。
 - 发布物：`release/lantai-shell-0.1.x-windows-x64/`（桌面壳绿色便携版：壳 exe + 服务 one-dir + WebView2Loader.dll，双击即用，**不制作 setup 安装包**），随附 zip 压缩包；**0.1.22 起为唯一发布形态**（此前双轨的独立服务版目录保留可回滚）。
-- 路线图与档位 3 方案（流式 SSE、对话历史、rerank、hybrid 检索、向量库替换、多跳聚合、RBAC、多平台）见 `docs/01-需求调研/需求池管理表.md` 与 `docs/02-方案设计/技术对接方案.md`。
+- 路线图与档位 3 方案（流式 SSE、对话历史、**rerank 与 hybrid 检索（0.1.39 已实现）**、向量库替换、多跳聚合、RBAC、多平台）见 `docs/01-需求调研/需求池管理表.md` 与 `docs/02-方案设计/技术对接方案.md`。
 
 ## 文档导航
 

@@ -63,6 +63,8 @@ class AiItem(BaseModel):
     model: str = ""
     prompt: str = ""
     temperature: float = 0.2
+    # 0.1.39（R106）：能力开关（当前仅 rerank 槽位使用；默认关闭）
+    enabled: bool = False
 
 
 class AiConfigPut(BaseModel):

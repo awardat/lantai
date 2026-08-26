@@ -67,9 +67,9 @@ function fmtSize(n) {
 const CATEGORY_LABELS = {
   text: "文字文档", office: "Office 文档", pdf_text: "文字 PDF",
   image: "图片", pdf_image: "图片 PDF（OCR）",
-  chat: "问答模型", embedding: "Embedding 模型",
+  chat: "问答模型", embedding: "Embedding 模型", rerank: "重排（Rerank）",
 };
-const AI_KEYS = ["text", "office", "pdf_text", "image", "pdf_image", "chat", "embedding"];
+const AI_KEYS = ["text", "office", "pdf_text", "image", "pdf_image", "chat", "embedding", "rerank"];
 const AI_DESCS = {
   text: "txt / md 等纯文本文件",
   office: "docx 等 Office 文档（提取文字与表格）",
@@ -78,10 +78,11 @@ const AI_DESCS = {
   pdf_image: "扫描件 PDF：逐页 OCR 识别文字",
   chat: "问答生成模型（全局）",
   embedding: "向量化模型（全局，如 bge-m3）",
+  rerank: "交叉编码器精排（可选；启用后检索结果重排，需 rerank 模型）",
 };
 // 槽位 → 供应商能力映射（用于推荐模型与能力提示）
-const SLOT_CAP = { text: "chat", office: "chat", pdf_text: "chat", image: "vision", pdf_image: "vision", chat: "chat", embedding: "embedding" };
-const CAP_LABELS = { chat: "问答/文字处理", vision: "图片理解/OCR", embedding: "向量化" };
+const SLOT_CAP = { text: "chat", office: "chat", pdf_text: "chat", image: "vision", pdf_image: "vision", chat: "chat", embedding: "embedding", rerank: "rerank" };
+const CAP_LABELS = { chat: "问答/文字处理", vision: "图片理解/OCR", embedding: "向量化", rerank: "重排" };
 let vendorsCache = [];
 
 function normUrl(u) {
@@ -637,8 +638,14 @@ function renderAiCards() {
     const placeholder = masked ? `已保存 ${masked}（留空保持不变）` : "API Key（Ollama 可留空）";
     const matched = vendorsCache.find((v) => normUrl(v.base_url) === normUrl(c.base_url)) || null;
     const cap = SLOT_CAP[key];
-    const capNote = matched && !matched.capabilities.includes(cap)
+    const capNote = cap !== "rerank" && matched && !matched.capabilities.includes(cap)
       ? `⚠ 该供应商不支持${CAP_LABELS[cap]}，请选择其他供应商（如通义/硅基流动）。`
+      : "";
+    // 0.1.39（R106）：rerank 组启用开关
+    const toggleRow = key === "rerank"
+      ? `<div class="form-row full">
+          <label class="toggle-label"><input type="checkbox" data-f="enabled" ${c.enabled ? "checked" : ""}> 启用重排（开启后每次问答对候选做交叉编码器精排）</label>
+        </div>`
       : "";
     return `<div class="ai-card" data-key="${key}">
       <div class="ai-card-head">
@@ -680,6 +687,7 @@ function renderAiCards() {
           <div class="form-row" style="justify-content:flex-end; flex-direction:row; align-items:flex-end;">
             <button class="mini-btn" onclick="testAi('${key}')">测试</button>
           </div>
+          ${toggleRow}
         </div>
         <div class="test-result" data-test-result="${key}"></div>
       </div>
@@ -742,11 +750,13 @@ function showAutoSaved() {
 
 function collectAiItem(key) {
   const card = document.querySelector(`.ai-card[data-key="${key}"]`);
-  const item = { provider: "", base_url: "", api_key: "", model: "", prompt: "", temperature: 0.2 };
+  const item = { provider: "", base_url: "", api_key: "", model: "", prompt: "", temperature: 0.2, enabled: false };
   card.querySelectorAll("[data-f]").forEach((el) => {
     if (el.type === "number") {
       const v = parseFloat(el.value);
       item[el.dataset.f] = Number.isFinite(v) ? v : 0.2;
+    } else if (el.type === "checkbox") {
+      item[el.dataset.f] = el.checked;  // 0.1.39（R106）：rerank 启用开关
     } else {
       item[el.dataset.f] = el.value.trim();
     }

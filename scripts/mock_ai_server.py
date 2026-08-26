@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -59,6 +60,25 @@ class Handler(BaseHTTPRequestHandler):
             if isinstance(texts, str):
                 texts = [texts]
             self._send_json({"object": "list", "data": [{"object": "embedding", "index": i, "embedding": EMBEDDING} for i in range(len(texts))]})
+            return
+
+        # 0.1.39（R106）：mock rerank——按"文档包含查询关键词数量"打分，使重排效果可见
+        if self.path.endswith("/rerank"):
+            query = (body.get("query") or "").lower()
+            docs = body.get("documents") or []
+            top_n = min(int(body.get("top_n") or len(docs)), max(len(docs), 1))
+            words = [w for w in re.findall(r"[\u4e00-\u9fffA-Za-z0-9]+", query) if w]
+            scored = []
+            for i, d in enumerate(docs):
+                dl = d.lower()
+                hits = sum(1 for w in words if w in dl)
+                scored.append((i, hits))
+            scored.sort(key=lambda t: (-t[1], t[0]))
+            results = [
+                {"index": i, "relevance_score": round(1.0 if hits else 0.2 + (0.1 * ((len(docs) - k) % 5)), 3)}
+                for k, (i, hits) in enumerate(scored[:top_n])
+            ]
+            self._send_json({"id": "mock-rerank", "model": body.get("model", "mock-rerank"), "results": results})
             return
 
         if self.path.endswith("/chat/completions"):

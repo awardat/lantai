@@ -203,3 +203,31 @@ def list_models(item: AiItem) -> list[str]:
         return [m.get("id", "") for m in data.get("data", []) if m.get("id")]
     except Exception as exc:  # noqa: BLE001
         raise RuntimeError(_friendly_error(exc, base)) from exc
+
+
+def rerank(item: AiItem, query: str, documents: list[str], top_n: int = 5) -> list[tuple[int, float]]:
+    """交叉编码器重排（0.1.39 R106）：POST {base}/rerank（OpenAI 兼容协议，如通义
+    qwen-rerank / 硅基流动 / 本地 Ollama rerank 模型）。
+
+    返回 [(documents 索引, relevance_score)]，按 relevance_score 降序。
+    失败抛 RuntimeError（中文提示）；调用方决定容错策略。
+    """
+    base = normalize_base_url(item.base_url)
+    try:
+        with httpx.Client(timeout=config.TIMEOUT_CHAT) as client:
+            resp = client.post(
+                f"{base}/rerank",
+                json={
+                    "model": item.model,
+                    "query": query,
+                    "documents": documents,
+                    "top_n": min(int(top_n or len(documents)), 100),
+                },
+                headers=_headers(item),
+            )
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(_friendly_error(exc, base)) from exc
+    results = sorted(data.get("results", []), key=lambda r: -float(r.get("relevance_score", 0.0)))
+    return [(int(r["index"]), float(r.get("relevance_score", 0.0))) for r in results if "index" in r]

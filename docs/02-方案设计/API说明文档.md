@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 |------|------|
 | 产品名称 | 兰台（lantai）本地 RAG 知识库 |
-| 文档版本 | V1.36（对应应用 0.1.38） |
+| 文档版本 | V1.37（对应应用 0.1.39） |
 | 生成时间 | 2026-08-23 |
 | 数据来源 | 技术对接方案.md、PRD产品需求文档.md（§6）、数据库设计文档.md |
 | 适用范围 | 前端调用与外部程序集成（API token） |
@@ -122,10 +122,10 @@ curl -F "file=@./兰台简介.txt" http://127.0.0.1:8000/api/docs/upload
 |------|:---:|------|
 | `knowledge_id` | 是 | 外部知识库 ID（当前版本不细分，检索全部就绪文档；保留字段供后续路由扩展） |
 | `query` | 是 | 检索问题 |
-| `retrieval_setting` | 是 | `{top_k: int(1~100，上限受 MAX_TOP_K=20 截断), score_threshold: float(0~1，命中过滤)}` |
+| `retrieval_setting` | 是 | `{top_k: int(1~100，上限受 MAX_TOP_K=20 截断), score_threshold: float(0~1，命中过滤)}`（score 见 §2.3/§2.4c 注：混合检索下三种来源分数统一归一 0~1，阈值语义一致） |
 | `metadata_condition` | 否 | 暂不处理（忽略） |
 
-错误：400（参数）、401（鉴权）、502（检索故障，如 embedding 服务不可用）。
+错误：400（参数）、401（鉴权）、502（检索故障——**仅**存储层异常如向量维度不一致；embedding 服务不可用时自动降级 BM25 关键词检索并正常返回结果，0.1.39）。
 
 **响应**：`{"records": [{"content", "score", "title", "metadata"}]}`（records 为空数组表示无命中）：
 
@@ -223,7 +223,7 @@ curl -X POST http://127.0.0.1:8000/api/chat \
 }
 ```
 
-`data.sources[]`：命中切片，按相似度降序；`score` 为余弦相似度（0~1，4 位小数）；前端可凭 `doc_id` 调预览接口。
+`data.sources[]`：命中切片，按相关度降序；**`score` 统一为 0~1（4 位小数，越大越相关）**——向量召回为余弦相似度、BM25 命中为 sigmoid 归一值、启用重排时为交叉编码器相关性分（三者可混排展示）；前端可凭 `doc_id` 调预览接口。0.1.39 起检索为**混合检索**（向量 + BM25 默认开启，RRF 融合），embedding 不可用时自动降级 BM25 关键词检索。
 
 **错误示例**（AI 未就绪）：`502` `{"code":502,"message":"AI 服务不可用（503）：本地 AI 服务未就绪或未启动（如 Ollama / OpenCode Go 代理），请确认服务已运行，或检查 Base URL 与网络。","data":null}`
 
@@ -285,7 +285,7 @@ data: {"type": "done"}
 
 ### 4.2 读取 AI 配置
 
-`GET /api/settings/ai` → `data` 为 7 组配置（API Key 脱敏，仅尾 4 位）：
+`GET /api/settings/ai` → `data` 为 8 组配置（API Key 脱敏，仅尾 4 位；0.1.39 新增 `rerank` 槽位，含 `enabled` 能力开关，默认 false）：
 
 ```json
 {
@@ -297,14 +297,15 @@ data: {"type": "done"}
     "image":      {"provider": "ollama", "base_url": "http://127.0.0.1:11434", "api_key": "", "model": "llava:7b", "prompt": "请详细描述这张图片的内容，包括其中的文字与版式。", "temperature": 0.2},
     "pdf_image":  {"provider": "ollama", "base_url": "http://127.0.0.1:11434", "api_key": "", "model": "llava:7b", "prompt": "请识别图片中的全部文字，保持原文顺序；图片中没有文字则说明图片内容。", "temperature": 0.2},
     "chat":       {"provider": "ollama", "base_url": "http://127.0.0.1:11434", "api_key": "", "model": "qwen2.5:7b", "prompt": "你是「兰台」知识库助手。……", "temperature": 0.3},
-    "embedding":  {"provider": "ollama", "base_url": "http://127.0.0.1:11434", "api_key": "", "model": "bge-m3", "prompt": "", "temperature": 0.0}
+    "embedding":  {"provider": "ollama", "base_url": "http://127.0.0.1:11434", "api_key": "", "model": "bge-m3", "prompt": "", "temperature": 0.0},
+    "rerank":     {"provider": "openai-compatible", "base_url": "", "api_key": "", "model": "", "prompt": "", "temperature": 0.0, "enabled": false}
   }
 }
 ```
 
 ### 4.3 保存 AI 配置
 
-`PUT /api/settings/ai`，body `{"items": {"<key>": {...}, ...}}`（key ∈ text/office/pdf_text/image/pdf_image/chat/embedding，可只提交部分）
+`PUT /api/settings/ai`，body `{"items": {"<key>": {...}, ...}}`（key ∈ text/office/pdf_text/image/pdf_image/chat/embedding/**rerank**，可只提交部分）
 
 | 字段 | 说明 |
 |------|------|
@@ -314,6 +315,7 @@ data: {"type": "done"}
 | model | 模型名（如 `qwen2.5:7b` / `llava:7b` / `bge-m3`） |
 | prompt | 提示词；留空用默认 |
 | temperature | 0~2 |
+| enabled | 布尔，能力开关（0.1.39；当前仅 `rerank` 槽位使用——true 时检索候选经交叉编码器精排，默认 false） |
 
 保存立即生效（后续解析与问答按新配置执行）。
 
@@ -363,7 +365,7 @@ data: {"type": "done"}
 ```json
 {
   "code": 0, "message": "ok",
-  "data": {"version": "0.1.38", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
+  "data": {"version": "0.1.39", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
 }
 ```
 
@@ -462,7 +464,7 @@ with httpx.Client(base_url="http://127.0.0.1:8000") as c:
 
 ---
 
-**文档状态**: API 说明 V1.36（与应用 0.1.38 同步）
+**文档状态**: API 说明 V1.37（与应用 0.1.39 同步）
 **生成时间**: 2026-08-23
 **前置文档**: 技术对接方案.md、PRD产品需求文档.md、数据库设计文档.md
 **变更规则**: 接口变更时本文件随版本同步更新（0.1.1 → 0.1.2 → …）

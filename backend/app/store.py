@@ -6,6 +6,8 @@ VectorStore 为向量检索的抽象入口；替换向量库（ChromaDB/Milvus�
 from __future__ import annotations
 
 import json
+import math
+import re
 import sqlite3
 import threading
 from datetime import datetime
@@ -34,9 +36,31 @@ DEFAULT_AI_CONFIG: dict[str, dict[str, Any]] = {
     "pdf_image": {"provider": "ollama", "base_url": "http://127.0.0.1:11434", "api_key": "", "model": "llava:7b", "prompt": _DEFAULT_OCR_PROMPT, "temperature": 0.2},
     "chat": {"provider": "ollama", "base_url": "http://127.0.0.1:11434", "api_key": "", "model": "qwen2.5:7b", "prompt": _DEFAULT_CHAT_PROMPT, "temperature": 0.3},
     "embedding": {"provider": "ollama", "base_url": "http://127.0.0.1:11434", "api_key": "", "model": "bge-m3", "prompt": "", "temperature": 0.0},
+    # 0.1.39（R106）：重排（rerank）——交叉编码器精排，默认关闭（model 为空 + enabled=False）
+    "rerank": {"provider": "openai-compatible", "base_url": "", "api_key": "", "model": "", "prompt": "", "temperature": 0.0, "enabled": False},
 }
 
-AI_CONFIG_KEYS = ("text", "office", "pdf_text", "image", "pdf_image", "chat", "embedding")
+AI_CONFIG_KEYS = ("text", "office", "pdf_text", "image", "pdf_image", "chat", "embedding", "rerank")
+
+# 中文 bigram 索引（0.1.39 R107）：FTS5 默认 unicode61 分词不可子串命中中文
+# （"密码法"≠match"密码"），写入/查询前将 CJK 段展开为字符 bigram，实现中文子串/词匹配。
+_CJK_RUN_RE = re.compile(r"([\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+)")
+
+
+def _fts_ngram(text: str) -> str:
+    """文本 → FTS 索引串：英文/数字原样保留，CJK 连续段展开为字符 bigram（空格连接）。"""
+    out: list[str] = []
+    for seg in _CJK_RUN_RE.split(text or ""):
+        if not seg:
+            continue
+        if _CJK_RUN_RE.fullmatch(seg):
+            if len(seg) == 1:
+                out.append(seg)
+            else:
+                out.extend(seg[i : i + 2] for i in range(len(seg) - 1))
+        else:
+            out.append(seg)
+    return " ".join(out)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS documents (
@@ -88,6 +112,8 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
+-- 0.1.39（R107）：BM25 全文索引（FTS5 + 中文 bigram），rowid 与 chunks.id 对齐
+CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(text, tokenize='unicode61');
 """
 
 
@@ -105,10 +131,15 @@ class Store:
         with self._connect() as conn:
             # 用 user_version 标记 schema 版本，避免每次实例化重复建表（L7）；
             # v2：新增 conversations / messages（对话历史，0.1.5）
+            # v3：新增 chunks_fts（BM25 全文索引，0.1.39 R107）并回填既有切片
             version = conn.execute("PRAGMA user_version").fetchone()[0]
-            if version < 2:
+            if version < 3:
                 conn.executescript(_SCHEMA)
-                conn.execute("PRAGMA user_version=2")
+                cur = conn.execute("SELECT id, text FROM chunks")
+                conn.execute("DELETE FROM chunks_fts")
+                for cid, text in cur.fetchall():
+                    conn.execute("INSERT INTO chunks_fts(rowid, text) VALUES (?,?)", (cid, _fts_ngram(text)))
+                conn.execute("PRAGMA user_version=3")
 
     # ------------------------------------------------------------ 基础连接
     def _connect(self) -> sqlite3.Connection:
@@ -198,6 +229,7 @@ class Store:
             return None
         with self._lock:
             with self._connect() as conn:
+                conn.execute("DELETE FROM chunks_fts WHERE rowid IN (SELECT id FROM chunks WHERE document_id=?)", (doc_id,))
                 conn.execute("DELETE FROM chunks WHERE document_id=?", (doc_id,))
                 conn.execute("DELETE FROM documents WHERE id=?", (doc_id,))
                 conn.commit()
@@ -206,26 +238,32 @@ class Store:
     # ------------------------------------------------------------ 切片与向量
     def clear_chunks(self, doc_id: int) -> None:
         """幂等化（CH-058/M4）：删除文档既有切片，供重解析前清理——
-        崩溃恢复重解析（requeue_pending）可能使同一文档切片重复入库。"""
+        崩溃恢复重解析（requeue_pending）可能使同一文档切片重复入库。
+        同步清理 BM25 索引（0.1.39 R107；CH-076 修复 M1：先清 FTS 再删主表，
+        顺序颠倒会导致子查询恒空、FTS 孤儿行无限累积）。"""
         with self._lock:
             with self._connect() as conn:
+                conn.execute("DELETE FROM chunks_fts WHERE rowid IN (SELECT id FROM chunks WHERE document_id=?)", (doc_id,))
                 conn.execute("DELETE FROM chunks WHERE document_id=?", (doc_id,))
                 conn.commit()
 
     def add_chunks(self, doc_id: int, texts: list[str], embeddings: np.ndarray) -> int:
-        """批量写入切片；embeddings 形状 (n, dim) float32。"""
-        rows = [
-            (doc_id, i, t, len(t), np.asarray(embeddings[i], dtype=np.float32).tobytes())
-            for i, t in enumerate(texts)
-        ]
+        """批量写入切片；embeddings 形状 (n, dim) float32。同步维护 BM25 索引（0.1.39 R107）。"""
+        count = 0
         with self._lock:
             with self._connect() as conn:
-                conn.executemany(
-                    "INSERT INTO chunks (document_id, seq, text, char_count, embedding) VALUES (?,?,?,?,?)",
-                    rows,
-                )
+                for i, t in enumerate(texts):
+                    cur = conn.execute(
+                        "INSERT INTO chunks (document_id, seq, text, char_count, embedding) VALUES (?,?,?,?,?)",
+                        (doc_id, i, t, len(t), np.asarray(embeddings[i], dtype=np.float32).tobytes()),
+                    )
+                    conn.execute(
+                        "INSERT INTO chunks_fts(rowid, text) VALUES (?,?)",
+                        (cur.lastrowid, _fts_ngram(t)),
+                    )
                 conn.commit()
-        return len(rows)
+                count = len(texts)
+        return count
 
     def search(self, query_vec: np.ndarray, top_k: int = config.DEFAULT_TOP_K) -> list[dict]:
         """向量余弦检索（全表扫描 + numpy）。返回按分数降序的命中列表。"""
@@ -269,6 +307,37 @@ class Store:
                     "score": round(float(scores[i]), 4),
                 }
             )
+        return out
+
+    def keyword_search(self, query: str, top_k: int = config.DEFAULT_TOP_K) -> list[dict]:
+        """BM25 关键词检索（0.1.39 R107：FTS5 + 中文 bigram 索引，零新依赖）。
+
+        返回与 search() 同构的命中列表；score 经 sigmoid 归一化到 0~1
+        （CH-076/M2 方案 A：统一对外 score 量纲，方向"越大越相关"），
+        向量余弦/BM25/rerank 三种来源在此契约下可安全混排展示。
+        查询为纯标点等无法 MATCH 时返回空列表。
+        """
+        q = _fts_ngram(query).strip()
+        if not q:
+            return []
+        try:
+            rows = self._query(
+                "SELECT f.rowid AS chunk_id, c.document_id AS doc_id, c.text AS chunk_text, "
+                "       d.name AS doc_name, d.category, -bm25(chunks_fts) AS raw "
+                "FROM chunks_fts f "
+                "JOIN chunks c ON c.id = f.rowid "
+                "JOIN documents d ON d.id = c.document_id "
+                "WHERE chunks_fts MATCH ? AND d.status = 'ready' "
+                "ORDER BY raw DESC LIMIT ?",
+                (q, top_k),
+            )
+        except sqlite3.OperationalError:
+            return []  # 查询串含不合法语法（如全部标点）：按无命中处理
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["score"] = round(1.0 / (1.0 + math.exp(-d.pop("raw"))), 4)  # sigmoid(-bm25) → 0~1
+            out.append(d)
         return out
 
     # ------------------------------------------------------------ 配置键值

@@ -89,6 +89,9 @@ def put_ai(body: AiConfigPut, session: str | None = Cookie(default=None, alias="
         old = current[key]
         new = dict(old)
         new.update({kk: vv for kk, vv in item.items() if kk in ("provider", "base_url", "model", "prompt")})
+        # 0.1.39（R106）：enabled 能力开关（rerank 槽位用）
+        if "enabled" in item and isinstance(item.get("enabled"), bool):
+            new["enabled"] = item["enabled"]
         provider = (item.get("provider") or "").strip()
         if provider not in ("", "ollama", "openai-compatible"):
             raise HTTPException(status_code=400, detail="provider 仅支持 ollama 或 openai-compatible。")
