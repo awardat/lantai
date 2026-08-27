@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-APP_VERSION = "0.1.41"
+APP_VERSION = "0.1.42"
 APP_NAME = "lantai"
 
 
@@ -57,7 +57,7 @@ CHUNK_SIZE = 400
 CHUNK_OVERLAP = 50
 
 # 检索参数
-DEFAULT_TOP_K = 5
+DEFAULT_TOP_K = 8  # 0.1.42（CH-081/B）：5→8——法律/长尾文档在 top-5~8 边缘时更易进入资料
 MAX_TOP_K = 20
 
 # PDF 文本层判定阈值（字符数，低于视为扫描件/图片 PDF）

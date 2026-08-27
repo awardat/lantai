@@ -36,8 +36,11 @@ def _rewrite_query(question: str, cfg: dict) -> str:
     if not (chat_cfg.get("model") or "").strip() or not (chat_cfg.get("base_url") or "").strip():
         return question
     try:
+        # 0.1.42（CH-081/A）：改写强制 temperature=0.0——同一问题改写结果稳定，
+        # 避免模型随机导致"法律/规范"类问题时而召回时而漏（用户实测时灵时不灵）
+        item = AiItem(**{**chat_cfg, "temperature": 0.0})
         out = chat(
-            AiItem(**chat_cfg),
+            item,
             [{"role": "user", "content": f"{_REWRITE_PROMPT}\n用户问题：{question}"}],
             slot="query_rewrite",
             timeout=15,

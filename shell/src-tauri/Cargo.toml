@@ -1,6 +1,6 @@
 [package]
 name = "lantai-shell"
-version = "0.1.41"
+version = "0.1.42"
 description = "兰台（lantai）本地 RAG 知识库桌面壳：内嵌终端 + WebView 包装"
 authors = ["lantai"]
 edition = "2021"

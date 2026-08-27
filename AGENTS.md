@@ -148,6 +148,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - ✅ 已执行：0.1.39（用户提出并确认实施，CH-075）：**混合检索（R107）+ 可选重排（R106）+ embedding 降级**——① BM25：SQLite **FTS5 + 中文 bigram** 索引（`chunks_fts` 零新依赖，add/clear/delete 同步、schema v3 回填）；② hybrid：`retriever` 向量 ∪ BM25 经 **RRF** 融合（单路自动退化）；③ 降级：embedding 故障自动 BM25 关键词检索（不再 502）；④ 重排（默认关）：设置页「重排」组（enabled 开关+模型），`llm.rerank`（/v1/rerank）交叉编码器精排，失败容错回退；mock 增 /v1/rerank；实测中文子串命中/RRF/开关切换/断线降级全通过；**⑥ CH-076 审核整改**——`clear_chunks` FTS 清理顺序修正（防重解析孤儿 FTS 行累积）、score 统一 sigmoid 归一 0~1（M2 方案 A：向量/BM25/rerank 同量纲保外部契约）、API 说明文档升 V1.37、维度不一致异常不再静默降级（保留 502 中文自救指引）。
 - ✅ 已执行：0.1.40（用户确认两项一起修并直接提交构建，CH-077/CH-078）：**① CH-078 rerank 候选池提前截断缺陷**（用户实测"什么法律要求进行等级保护"top_k=5 不见《网络安全法》、top_k=20 时第 1）——`retriever` **RRF 融合改固定候选池 RECALL_TOP=20**，rerank 对候选池精排后再截取 top_k（未启用 rerank 行为不变）；实测 top_k=5 + rerank 法律文档进 sources 第 1；**② CH-077 `--host 0.0.0.0` 启动横幅更正**——不再打印不可访问的 `http://0.0.0.0:8000`，改"已监听所有网卡 + 本机/局域网双地址提示"。
 - ✅ 已执行：0.1.41（用户选定方案 A + 日志改进，CH-079/CH-080）：**① CH-079 检索查询改写（方案 A）**——`retriever.retrieve` 前置 LLM 改写（chat 槽位，口语问题→检索友好查询，补"法律依据/规定/制度"上位概念，解决"什么法律要求等级保护"类问题召回不到《网络安全法》），失败/超时/未配置回退原问题；改写调用进 agent log（query_rewrite 槽位）；**② CH-080 rerank 接入 agent_log**（slot=rerank：query/候选数/top_n/结果/耗时/失败原因），实测 agent 日志含 rerank 行。
+- ✅ 已执行：0.1.42（用户选定 A+B，CH-081）：**改写稳定化 + 默认召回扩宽**——A `_rewrite_query` 强制 temperature=0.0（同一问题改写结果稳定，消除"时灵时不灵"）；B `DEFAULT_TOP_K` 5→8 + 前端提问 top_k 同步（法律/长尾文档在 top-5~8 边缘时稳定进资料）；不做 C。
 - ⏳ **等待用户确认**后再进入后续迭代（RBAC、多平台、Docker、档位 3 等均只入需求与文档）。
 
 ## 会话注意事项

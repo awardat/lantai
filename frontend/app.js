@@ -478,7 +478,7 @@ async function ask() {
     const resp = await fetch("/api/chat/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: q, top_k: 5, conversation_id: currentConvId }),
+      body: JSON.stringify({ question: q, top_k: 8, conversation_id: currentConvId }),
     });
     if (!resp.ok || !resp.body) {
       let msg = `请求失败（HTTP ${resp.status}）`;
