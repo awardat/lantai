@@ -53,8 +53,39 @@ def read_text_file(path: Path) -> str:
     return raw.decode("utf-8", errors="replace")
 
 
+def _table_to_nl(rows: list[list[str]], table_name: str) -> list[str]:
+    """表格行 → 自然语言句（0.1.43，CH-084，投研报告 V3 方案借鉴）。
+
+    Embedding 对数字/结构化数据区分度差（"15ms"与"20ms"向量几乎重叠），
+    表格整块或切碎检索都差；把"表头+行值"转成一句自然语言、每行一句，
+    使向量与 BM25 均能精准命中。纯规则模板、零 LLM 依赖（防幻觉）。
+
+    - 首行视为表头；后续每行 → "{表名}：{表头1}为{值1}，{表头2}为{值2}，…"
+    - 值非空才生成；表头缺失用"第 N 列"兜底
+    - 只有表头（无数据行）→ 原样输出表头
+    """
+    if not rows:
+        return []
+    nc = max(len(r) for r in rows)
+    header = [str(x).strip() if x is not None else "" for x in (rows[0] if rows else [])]
+    out: list[str] = []
+    for r in rows[1:]:
+        pairs: list[str] = []
+        for i in range(nc):
+            v = r[i] if i < len(r) else None
+            if v is None or str(v).strip() == "":
+                continue
+            h = header[i] if i < len(header) and header[i] else f"第{i + 1}列"
+            pairs.append(f"{h}为{str(v).strip()}")
+        if pairs:
+            out.append(f"{table_name}：" + "，".join(pairs))
+    if not out and header:
+        out.append(" | ".join(h for h in header if h))
+    return out
+
+
 def parse_docx(path: Path) -> str:
-    """docx → 段落 + 表格文本。"""
+    """docx → 段落 + 表格文本（表格行转自然语言，CH-084）。"""
     from docx import Document  # python-docx
 
     doc = Document(str(path))
@@ -63,16 +94,17 @@ def parse_docx(path: Path) -> str:
     from docx.table import Table
     from docx.text.paragraph import Paragraph
 
+    tbl_idx = 0
     for block in doc.element.body.iterchildren():
         if block.tag.endswith("}p"):
             para = Paragraph(block, doc)
             if para.text.strip():
                 parts.append(para.text.strip())
         elif block.tag.endswith("}tbl"):
+            tbl_idx += 1
             table = Table(block, doc)
-            for row in table.rows:
-                cells = [c.text.strip() for c in row.cells]
-                parts.append(" | ".join(cells))
+            rows = [[c.text.strip() for c in row.cells] for row in table.rows]
+            parts.extend(_table_to_nl(rows, f"表格{tbl_idx}"))
     return "\n".join(parts)
 
 
@@ -128,8 +160,37 @@ def parse_wps(path: Path) -> str:
     return parse_doc(path)
 
 
+def _format_cell(v, fmt: str = "") -> str:
+    """单元格值 → 展示文本（0.1.43 CH-087：格式识别，避免"日期序数/裸百分比"进 NL 句）。
+
+    - datetime/date/time → ISO 文本（"2025-08-27"）
+    - 数字 + 百分比格式（如 "0.00%"） → "35.25%"
+    - 整型化 float（15.0 → "15"）；其余原样字符串
+    """
+    import datetime as _dt
+
+    if v is None:
+        return ""
+    if isinstance(v, bool):
+        return "是" if v else "否"
+    if isinstance(v, _dt.datetime):
+        # 时间全零（Excel 常见）→ 只留日期，避免 "2025-08-27 00:00:00" 噪声
+        if v.hour == 0 and v.minute == 0 and v.second == 0 and v.microsecond == 0:
+            return v.strftime("%Y-%m-%d")
+        return v.strftime("%Y-%m-%d %H:%M:%S")
+    if isinstance(v, _dt.date):
+        return v.strftime("%Y-%m-%d")
+    if isinstance(v, _dt.time):
+        return v.strftime("%H:%M:%S")
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        if "%" in (fmt or ""):
+            return f"{round(float(v) * 100, 6):g}%"
+        return str(int(v)) if float(v).is_integer() else str(v)
+    return str(v).strip()
+
+
 def parse_xls(path: Path) -> str:
-    """.xls（Excel 97-2003）→ 单元格文本拼接。"""
+    """.xls（Excel 97-2003）→ 单元格文本（表格行转自然语言，CH-084；日期转文本 CH-087）。"""
     import xlrd
 
     try:
@@ -138,21 +199,30 @@ def parse_xls(path: Path) -> str:
         return ""  # 非 xls（损坏/伪装扩展名）→ 空，由上层提示
     parts: list[str] = []
     for sheet in book.sheets():
+        rows: list[list[str]] = []
         for row in range(sheet.nrows):
-            cells = []
+            vals: list[str] = []
             for col in range(sheet.ncols):
-                v = sheet.cell_value(row, col)
-                if isinstance(v, float) and v == int(v):
-                    v = int(v)
-                if v not in (None, ""):
-                    cells.append(str(v))
-            if cells:
-                parts.append(" | ".join(cells))
+                cell = sheet.cell(row, col)
+                v = cell.value
+                if v in (None, ""):
+                    vals.append("")
+                    continue
+                # L2/CH-087：Excel 日期存为 float 序数（如 45200），NL 句内伪语义更"可信"——
+                # 按日期类型转换（xlrd 2.x 无 formatting_info，仅能识别日期 ctype）
+                if cell.ctype == xlrd.XL_CELL_DATE:
+                    d = xlrd.xldate_as_datetime(v, book.datemode)
+                    vals.append(d.strftime("%Y-%m-%d"))
+                else:
+                    vals.append(_format_cell(v))
+            if any(x.strip() for x in vals):
+                rows.append(vals)
+        parts.extend(_table_to_nl(rows, sheet.name or "表格"))
     return "\n".join(parts)
 
 
 def parse_xlsx(path: Path) -> str:
-    """.xlsx → 单元格文本拼接。"""
+    """.xlsx → 单元格文本（表格行转自然语言，CH-084；日期/百分比按格式展示 CH-087）。"""
     from openpyxl import load_workbook
 
     try:
@@ -161,10 +231,12 @@ def parse_xlsx(path: Path) -> str:
         return ""  # 非 xlsx（损坏/伪装扩展名）→ 空，由上层提示
     parts: list[str] = []
     for ws in wb.worksheets:
-        for row in ws.iter_rows(values_only=True):
-            cells = [str(c).strip() for c in row if c is not None and str(c).strip()]
-            if cells:
-                parts.append(" | ".join(cells))
+        rows: list[list[str]] = []
+        for row in ws.iter_rows():
+            vals = [_format_cell(c.value, c.number_format or "") for c in row]
+            if any(x for x in vals):
+                rows.append(vals)
+        parts.extend(_table_to_nl(rows, ws.title or "表格"))
     wb.close()
     return "\n".join(parts)
 
@@ -180,11 +252,9 @@ def _shape_text(shape) -> str:
             out.append(_shape_text(sub))
         return "\n".join(out)
     if st == MSO_SHAPE_TYPE.TABLE:
-        for row in shape.table.rows:
-            cells = [c.text.strip() for c in row.cells if c.text.strip()]
-            if cells:
-                out.append(" | ".join(cells))
-        return "\n".join(out)
+        # 0.1.43（CH-084）：表格行转自然语言
+        rows = [[c.text.strip() for c in row.cells] for row in shape.table.rows]
+        return "\n".join(_table_to_nl(rows, "表格"))
     if shape.has_text_frame:
         for para in shape.text_frame.paragraphs:
             t = "".join(run.text for run in para.runs).strip()
