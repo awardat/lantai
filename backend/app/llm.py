@@ -211,8 +211,15 @@ def rerank(item: AiItem, query: str, documents: list[str], top_n: int = 5) -> li
 
     返回 [(documents 索引, relevance_score)]，按 relevance_score 降序。
     失败抛 RuntimeError（中文提示）；调用方决定容错策略。
+    0.1.41（CH-080）：成功/失败均写 agent_log（slot=rerank），重排可观测。
     """
+    import time
+
+    from . import agent_log
+
     base = normalize_base_url(item.base_url)
+    t0 = time.monotonic()
+    msg = [{"role": "user", "content": f"query={query}\n候选数={len(documents)} top_n={top_n}"}]
     try:
         with httpx.Client(timeout=config.TIMEOUT_CHAT) as client:
             resp = client.post(
@@ -228,6 +235,20 @@ def rerank(item: AiItem, query: str, documents: list[str], top_n: int = 5) -> li
             resp.raise_for_status()
             data = resp.json()
     except Exception as exc:  # noqa: BLE001
+        agent_log.log_call(
+            slot="rerank", provider=item.provider, base_url=base, model=item.model,
+            messages=msg, ok=False, error=_friendly_error(exc, base),
+            duration_ms=int((time.monotonic() - t0) * 1000),
+        )
         raise RuntimeError(_friendly_error(exc, base)) from exc
     results = sorted(data.get("results", []), key=lambda r: -float(r.get("relevance_score", 0.0)))
-    return [(int(r["index"]), float(r.get("relevance_score", 0.0))) for r in results if "index" in r]
+    out = [(int(r["index"]), float(r.get("relevance_score", 0.0))) for r in results if "index" in r]
+    agent_log.log_call(
+        slot="rerank", provider=item.provider, base_url=base, model=item.model,
+        messages=msg,
+        answer="top" + "|".join(f"#{i}:{s:.3f}" for i, s in out[:10]),
+        usage=data.get("usage"),
+        duration_ms=int((time.monotonic() - t0) * 1000),
+        ok=True,
+    )
+    return out

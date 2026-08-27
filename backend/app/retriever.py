@@ -17,6 +17,36 @@ log = logging.getLogger("lantai")
 RRF_K = 60          # RRF 常数
 RECALL_TOP = 20     # 融合候选规模（向量/BM25 各取前 RECALL_TOP，再融合取 top_k）
 
+# 0.1.41（CH-079 方案 A）：检索查询改写——把口语问题改写为检索友好查询，
+# 缓解"语义层级"问题（如"什么法律要求等级保护"应召回《网络安全法》第 21 条文）
+_REWRITE_PROMPT = (
+    "你是检索查询改写器。把用户的问题改写成更适合知识库向量/关键词检索的查询词："
+    "保留专有名词与领域术语，可补充同义或上位概念（如\"法律依据\"\"规定\"\"制度\"），"
+    "只需输出一段简洁的中文查询文本，不要解释。"
+)
+
+
+def _rewrite_query(question: str, cfg: dict) -> str:
+    """LLM 查询改写（用 chat 槽位；失败/超时/无配置回退原问题，不阻塞问答）。
+    改写调用本身走 agent_log（slot=query_rewrite），可观测。"""
+    from .llm import chat
+    from .schemas import AiItem
+
+    chat_cfg = cfg.get("chat") or {}
+    if not (chat_cfg.get("model") or "").strip() or not (chat_cfg.get("base_url") or "").strip():
+        return question
+    try:
+        out = chat(
+            AiItem(**chat_cfg),
+            [{"role": "user", "content": f"{_REWRITE_PROMPT}\n用户问题：{question}"}],
+            slot="query_rewrite",
+            timeout=15,
+        ).strip()
+    except Exception as exc:  # noqa: BLE001 改写服务不可用 → 原问题
+        log.warning("查询改写失败，使用原问题：%s", exc)
+        return question
+    return out if out and out != question else question
+
 
 def _rerank_results(cfg: dict, question: str, sources: list[dict], top_k: int) -> list[dict]:
     """交叉编码器重排候选（R106）。重排失败时容错回退原排序（不阻塞问答）。"""
@@ -53,19 +83,22 @@ def retrieve(question: str, top_k: int = config.DEFAULT_TOP_K, st: store_mod.Sto
     cfg = st.get_ai_config()
     k = min(top_k, config.MAX_TOP_K)
 
+    # 0. 查询改写（CH-079 方案 A）：口语问题 → 检索友好查询（失败回退原问题）
+    q = _rewrite_query(question, cfg)
+
     # 1. 向量召回（embedding 故障 → 空列表，走 BM25 兜底；维度不一致等
     #    存储层问题不降级——保留"删除旧文档重新上传"的中文自救指引，CH-076/L1）
     vec: list[dict] = []
     q_vec = None
     try:
-        q_vec = embeddings.embed_query(AiItem(**cfg["embedding"]), question)
+        q_vec = embeddings.embed_query(AiItem(**cfg["embedding"]), q)
     except Exception as exc:  # noqa: BLE001 降级：AI embedding 不可用
         log.warning("embedding 不可用，降级 BM25 关键词检索：%s", exc)
     if q_vec is not None:
         vec = st.search(q_vec, top_k=max(k, RECALL_TOP))  # RuntimeError（如维度不一致）上抛，不吞
 
     # 2. BM25 召回
-    bm = st.keyword_search(question, top_k=max(k, RECALL_TOP))
+    bm = st.keyword_search(q, top_k=max(k, RECALL_TOP))
 
     # 3. RRF 融合为固定候选池（CH-078：rerank 前不截断到 top_k——候选池不足时
     #    法律/长尾文档被挤掉，rerank 鞭长莫及；候选池保持 RECALL_TOP 供精排）
@@ -74,7 +107,7 @@ def retrieve(question: str, top_k: int = config.DEFAULT_TOP_K, st: store_mod.Sto
     # 4. rerank 精排（R106，设置页开启时）：对完整候选池精排后截取 top_k
     rcfg = cfg.get("rerank") or {}
     if candidates and rcfg.get("enabled") and (rcfg.get("model") or "").strip():
-        sources = _rerank_results(rcfg, question, candidates, k)
+        sources = _rerank_results(rcfg, q, candidates, k)
     else:
         sources = candidates[:k]  # 未启用 rerank：RRF 候选直接截断到 top_k
     return sources

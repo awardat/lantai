@@ -100,6 +100,19 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     last_user = c
                 break
+            # 0.1.41（CH-079）：查询改写探测——prompt 含"检索查询改写器"时回显用户问题原文
+            # （mock 不具备真正改写能力，回显保证链路可测）
+            if "检索查询改写器" in last_user and "用户问题：" in last_user:
+                q = last_user.split("用户问题：", 1)[-1].strip()
+                self._send_json(
+                    {
+                        "id": "mock-completion",
+                        "object": "chat.completion",
+                        "choices": [{"index": 0, "message": {"role": "assistant", "content": q}, "finish_reason": "stop"}],
+                        "usage": {"prompt_tokens": 30, "completion_tokens": len(q), "total_tokens": 30 + len(q)},
+                    }
+                )
+                return
             reply = f"（Mock 回复）已收到你的问题：「{last_user[:60]}」。这是兰台流式输出的模拟答案，用于开发自测。"
             reasoning = "（Mock 思维链）我正在分析问题，检索到的资料显示这是兰台知识库的自测场景，我将给出基于资料的模拟回答。"
             if body.get("stream"):
