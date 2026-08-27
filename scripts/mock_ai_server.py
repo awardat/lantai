@@ -67,7 +67,13 @@ class Handler(BaseHTTPRequestHandler):
             query = (body.get("query") or "").lower()
             docs = body.get("documents") or []
             top_n = min(int(body.get("top_n") or len(docs)), max(len(docs), 1))
-            words = [w for w in re.findall(r"[\u4e00-\u9fffA-Za-z0-9]+", query) if w]
+            # 长中文查询按 2-gram 拆分命中，使重排效果贴近真实（与后端 bigram 检索一致）
+            words: list[str] = re.findall(r"[a-z0-9]+", query)
+            for seg in re.findall(r"[\u3400-\u9fff]+", query):
+                if len(seg) >= 2:
+                    words.extend(seg[i : i + 2] for i in range(len(seg) - 1))
+                else:
+                    words.append(seg)
             scored = []
             for i, d in enumerate(docs):
                 dl = d.lower()

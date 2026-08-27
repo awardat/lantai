@@ -34,12 +34,25 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    url = f"http://{args.host}:{config.DEFAULT_PORT}"
+    # CH-077：通配（0.0.0.0/::）不是可访问地址，提示拆分为本机 + 局域网两个地址
+    is_wildcard = args.host in ("0.0.0.0", "::")
+    base_url = (
+        f"http://{config.DEFAULT_HOST}:{config.DEFAULT_PORT}"
+        if is_wildcard
+        else f"http://{args.host}:{config.DEFAULT_PORT}"
+    )
     if not args.server:
-        threading.Timer(1.5, lambda: webbrowser.open(url)).start()
-        print(f"兰台（lantai）v{config.APP_VERSION} 启动中：{url} （Ctrl+C 退出）")
+        threading.Timer(1.5, lambda: webbrowser.open(base_url)).start()
+        print(f"兰台（lantai）v{config.APP_VERSION} 启动中：{base_url} （Ctrl+C 退出）")
     else:
-        print(f"兰台（lantai）v{config.APP_VERSION} 服务已就绪：{url} （--server 模式）")
+        if is_wildcard:
+            print(
+                f"兰台（lantai）v{config.APP_VERSION} 服务已就绪：已监听所有网卡（{args.host}）——"
+                f"本机访问 http://127.0.0.1:{config.DEFAULT_PORT}，"
+                f"局域网/远程访问 http://<本机IP>:{config.DEFAULT_PORT}（cmd 运行 ipconfig 查看本机 IP）"
+            )
+        else:
+            print(f"兰台（lantai）v{config.APP_VERSION} 服务已就绪：{base_url} （--server 模式）")
     # 直接传应用对象：冻结（PyInstaller）环境下字符串导入不可靠
     uvicorn.run(fastapi_app, host=args.host, port=config.DEFAULT_PORT, log_level="info")
 

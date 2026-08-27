@@ -67,13 +67,16 @@ def retrieve(question: str, top_k: int = config.DEFAULT_TOP_K, st: store_mod.Sto
     # 2. BM25 召回
     bm = st.keyword_search(question, top_k=max(k, RECALL_TOP))
 
-    # 3. RRF 融合（单路为空时 RRF 退化为该路排序）
-    sources = _rrf_fuse(vec, bm, k)
+    # 3. RRF 融合为固定候选池（CH-078：rerank 前不截断到 top_k——候选池不足时
+    #    法律/长尾文档被挤掉，rerank 鞭长莫及；候选池保持 RECALL_TOP 供精排）
+    candidates = _rrf_fuse(vec, bm, RECALL_TOP)
 
-    # 4. rerank 精排（R106，设置页开启时）
+    # 4. rerank 精排（R106，设置页开启时）：对完整候选池精排后截取 top_k
     rcfg = cfg.get("rerank") or {}
-    if sources and rcfg.get("enabled") and (rcfg.get("model") or "").strip():
-        sources = _rerank_results(rcfg, question, sources, k)
+    if candidates and rcfg.get("enabled") and (rcfg.get("model") or "").strip():
+        sources = _rerank_results(rcfg, question, candidates, k)
+    else:
+        sources = candidates[:k]  # 未启用 rerank：RRF 候选直接截断到 top_k
     return sources
 
 
