@@ -138,6 +138,23 @@ def retry_document(doc_id: int, payload: Optional[dict] = Body(default=None)):
     return ok(None, message=message)
 
 
+@router.post("/{doc_id}/reparse")
+def reparse_document(doc_id: int):
+    """文档级重新解析（0.1.45，CH-089/A）：任意非解析中文档清除既有切片后，
+    按当前版本方法重新入队解析——版本升级（如 0.1.44 表格 NL）后升级老文档产物。
+    与 retry 的区别：ready 状态也允许（retry 仅 failed），保留源文件与 doc_id。"""
+    doc = store.get_document(doc_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="文档不存在或已被删除。")
+    if doc["status"] == "parsing":
+        raise HTTPException(status_code=400, detail="文档正在解析中，请稍后（解析完成后再重新解析）。")
+    store.reparse_document(doc_id)
+    from ..task_queue import enqueue
+
+    enqueue(doc_id)
+    return ok(_doc_out(store.get_document(doc_id)).model_dump(), message=f"已提交重新解析：{doc['name']}")
+
+
 @router.get("/{doc_id}/preview")
 def preview_document(doc_id: int):
     """Web 内预览：返回按类型渲染的文本内容（图片返回 raw 直出提示）。"""

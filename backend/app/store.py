@@ -204,6 +204,17 @@ class Store:
                 conn.commit()
                 return cur.rowcount > 0
 
+    def reparse_document(self, doc_id: int) -> None:
+        """文档级重新解析（0.1.45，CH-089/A）：清除既有切片（含 BM25 索引同步）
+        并置回排队——供版本升级后用当前方法重造老文档产物（如 0.1.44 表格 NL）。
+        仅由排除了 parsing 状态的调用方触发。"""
+        with self._lock:
+            with self._connect() as conn:
+                conn.execute("DELETE FROM chunks_fts WHERE rowid IN (SELECT id FROM chunks WHERE document_id=?)", (doc_id,))
+                conn.execute("DELETE FROM chunks WHERE document_id=?", (doc_id,))
+                conn.execute("UPDATE documents SET status='queued', error=NULL, chunk_count=0 WHERE id=?", (doc_id,))
+                conn.commit()
+
     def set_document_category(self, doc_id: int, category: str) -> None:
         with self._lock:
             with self._connect() as conn:

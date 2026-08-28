@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 |------|------|
 | 产品名称 | 兰台（lantai）本地 RAG 知识库 |
-| 文档版本 | V1.42（对应应用 0.1.44） |
+| 文档版本 | V1.43（对应应用 0.1.45） |
 | 生成时间 | 2026-08-23 |
 | 数据来源 | 技术对接方案.md、PRD产品需求文档.md（§6）、数据库设计文档.md |
 | 适用范围 | 前端调用与外部程序集成（API token） |
@@ -108,6 +108,10 @@ curl -F "file=@./兰台简介.txt" http://127.0.0.1:8000/api/docs/upload
 |------|------|------|
 | `ext` | 指定具体扩展名（0.1.36，伪装扩展名纠正）：白名单内自动更新扩展名与分类后按新类型解析；白名单外 400 `不支持的文件类型：<ext>` | `{"ext":".docx"}` |
 | `category` | 指定文件大类（0.1.37，识别问题手工兜底）：枚举 `text / office / pdf_text / pdf_image / image`，非法值 400 `不支持的文件大类：<值>（可选：text / office / pdf_text / pdf_image / image）`；**大类联动扩展名**——pdf_text/pdf_image→`.pdf`、image→`.png`、text→`.txt`（已是 txt/md 保持）、office→保持原扩展名 | `{"category":"pdf_image"}` |
+
+### 2.4e 文档重新解析（V1.43 新增，0.1.45，CH-089/A）
+
+`POST /api/docs/{doc_id}/reparse` → 任意**非解析中**状态的文档（含 `ready`）清除既有切片后按当前版本方法重新入队解析（版本升级后按新方法重造产物，源文件与 doc_id 不变，不产生重复文档）：`parsing` 状态返回 400 `文档正在解析中，请稍后（解析完成后再重新解析）。`；不存在返回 404；成功返回 `data` 为最新文档对象、`message` 提示已提交重新解析。全库批量用法：`python scripts/reparse_all.py`（遍历 ready/failed 逐个调用；`--host`/`--ids` 可指定）。
 
 不传 body → 按原类型重试（行为不变）。示例：扫描件被误判为文字 PDF → 解析失败 → `POST /api/docs/{id}/retry {"category":"pdf_image"}` → 按 OCR 通道重新解析。
 
@@ -366,7 +370,7 @@ data: {"type": "done"}
 ```json
 {
   "code": 0, "message": "ok",
-  "data": {"version": "0.1.44", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
+  "data": {"version": "0.1.45", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
 }
 ```
 
@@ -473,7 +477,7 @@ with httpx.Client(base_url="http://127.0.0.1:8000") as c:
 
 ---
 
-**文档状态**: API 说明 V1.42（与应用 0.1.44 同步）
+**文档状态**: API 说明 V1.43（与应用 0.1.45 同步）
 **生成时间**: 2026-08-23
 **前置文档**: 技术对接方案.md、PRD产品需求文档.md、数据库设计文档.md
 **变更规则**: 接口变更时本文件随版本同步更新（0.1.1 → 0.1.2 → …）

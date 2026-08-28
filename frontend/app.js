@@ -289,6 +289,8 @@ function renderDocs(docs) {
     // 失败行：大类下拉（指定后重试按该大类解析，识别问题手工兜底）+ 重试按钮（0.1.34/0.1.37）
     const retryBox = d.status === "failed" ? `<select class="retry-type" data-id="${d.id}" title="文件被识别错时手动指定真实大类后点「重试」（如扫描件指定「图片 PDF（OCR）」）">${retryCatOptions}</select>
         <button class="mini-btn" onclick="retryDoc(${d.id})">重试</button>` : "";
+    // 0.1.45（CH-089/A）：已就绪文档可「重新解析」（版本升级后按当前方法重造切片，如表格 NL）
+    const reparseBtn = d.status === "ready" ? `<button class="mini-btn" onclick="reparseDoc(${d.id}, '${esc(d.name).replace(/'/g, "\\'")}')" title="按当前解析方法重新解析（升级版本后可重新生成切片）">重新解析</button>` : "";
     return `<tr>
       <td>${esc(d.name)}</td>
       <td>${esc(CATEGORY_LABELS[d.category] || d.category)}</td>
@@ -299,6 +301,7 @@ function renderDocs(docs) {
       <td>
         <button class="mini-btn" onclick="openPreview(${d.id})">预览</button>
         ${retryBox}
+        ${reparseBtn}
         <button class="mini-btn danger" onclick="deleteDoc(${d.id}, '${esc(d.name).replace(/'/g, "\\'")}')">删除</button>
       </td>
     </tr>`;
@@ -313,6 +316,18 @@ async function retryDoc(id) {
   try {
     const r = await api(`/api/docs/${id}/retry`, { method: "POST", body });
     toast(r && r.message ? r.message : "已重新提交解析。", "success");
+  } catch (e) {
+    toast(e.message, "error");
+  }
+  loadDocs();
+}
+
+// 0.1.45（CH-089/A）：已就绪文档重新解析（版本升级后按当前方法重造切片）
+async function reparseDoc(id, name) {
+  if (!confirm(`按当前解析方法重新解析「${name}」？\n将清除该文档现有切片并重新入库，同内容不会重复保留。`)) return;
+  try {
+    const r = await api(`/api/docs/${id}/reparse`, { method: "POST" });
+    toast(r && r.message ? r.message : "已提交重新解析。", "success");
   } catch (e) {
     toast(e.message, "error");
   }
