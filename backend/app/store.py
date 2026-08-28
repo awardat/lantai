@@ -33,7 +33,7 @@ DEFAULT_AI_CONFIG: dict[str, dict[str, Any]] = {
     "office": {"provider": "ollama", "base_url": "http://127.0.0.1:11434", "api_key": "", "model": "qwen2.5:7b", "prompt": "", "temperature": 0.2},
     "pdf_text": {"provider": "ollama", "base_url": "http://127.0.0.1:11434", "api_key": "", "model": "qwen2.5:7b", "prompt": "", "temperature": 0.2},
     "image": {"provider": "ollama", "base_url": "http://127.0.0.1:11434", "api_key": "", "model": "llava:7b", "prompt": _DEFAULT_IMAGE_PROMPT, "temperature": 0.2},
-    "pdf_image": {"provider": "ollama", "base_url": "http://127.0.0.1:11434", "api_key": "", "model": "llava:7b", "prompt": _DEFAULT_OCR_PROMPT, "temperature": 0.2},
+    "pdf_image": {"provider": "ollama", "base_url": "http://127.0.0.1:11434", "api_key": "", "model": "llava:7b", "prompt": _DEFAULT_OCR_PROMPT, "temperature": 0.2, "local_ocr": False},
     "chat": {"provider": "ollama", "base_url": "http://127.0.0.1:11434", "api_key": "", "model": "qwen2.5:7b", "prompt": _DEFAULT_CHAT_PROMPT, "temperature": 0.3},
     "embedding": {"provider": "ollama", "base_url": "http://127.0.0.1:11434", "api_key": "", "model": "bge-m3", "prompt": "", "temperature": 0.0},
     # 0.1.39（R106）：重排（rerank）——交叉编码器精排，默认关闭（model 为空 + enabled=False）

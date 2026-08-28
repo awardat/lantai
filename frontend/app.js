@@ -662,6 +662,12 @@ function renderAiCards() {
           <label class="toggle-label"><input type="checkbox" data-f="enabled" ${c.enabled ? "checked" : ""}> 启用重排（开启后每次问答对候选做交叉编码器精排）</label>
         </div>`
       : "";
+    // 0.1.46（CH-090）：pdf_image 卡「本地 OCR」开关（Tesseract 离线识别，替代视觉模型）
+    const localOcrRow = key === "pdf_image"
+      ? `<div class="form-row full">
+          <label class="toggle-label"><input type="checkbox" data-f="local_ocr" ${c.local_ocr ? "checked" : ""}> 使用本地 OCR（Tesseract，离线免费；需先安装并添加中文语言数据 chi_sim，安装方法见 README「本地 OCR」）</label>
+        </div>`
+      : "";
     return `<div class="ai-card" data-key="${key}">
       <div class="ai-card-head">
         <span class="cat">${CATEGORY_LABELS[key]}</span>
@@ -669,6 +675,7 @@ function renderAiCards() {
         <span class="model-tag">${esc(c.model || "未配置")}</span>
       </div>
       <div class="ai-card-body">
+        ${localOcrRow}
         <div class="cap-note">${esc(capNote)}</div>
         <div class="grid2">
           <div class="form-row">

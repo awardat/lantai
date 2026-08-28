@@ -65,6 +65,9 @@ class AiItem(BaseModel):
     temperature: float = 0.2
     # 0.1.39（R106）：能力开关（当前仅 rerank 槽位使用；默认关闭）
     enabled: bool = False
+    # 0.1.46（CH-090）：本地 OCR 开关（当前仅 pdf_image 槽位使用；开启后扫描件
+    # 走本机 Tesseract 离线识别，不调用视觉模型）
+    local_ocr: bool = False
 
 
 class AiConfigPut(BaseModel):

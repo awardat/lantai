@@ -1,6 +1,6 @@
 # 兰台（lantai）· 本地 RAG 知识库
 
-> 版本 **0.1.45** ｜ 平台 **Windows x64**（MVP）｜ 单机部署 ｜ 无构建步骤，两步启动
+> 版本 **0.1.46** ｜ 平台 **Windows x64**（MVP）｜ 单机部署 ｜ 无构建步骤，两步启动
 
 ## 起名意境
 
@@ -76,6 +76,19 @@ ollama pull llava:7b                            # 图片理解模型（可选；
 > **提示**：DeepSeek、Kimi、小米 MiMo 官方 API **无 embedding 接口**，向量化请选通义 / 硅基流动 / 本地 `bge-m3`。
 > **重排（可选增强）**：默认关闭（系统为 BM25+向量混合检索）。启用需配置 rerank 模型（如硅基流动，Base URL `https://api.siliconflow.cn/v1`，模型 `BAAI/bge-reranker-v2-m3`），勾选「启用重排」即对检索候选精排；重排服务不可用时自动回退混合检索，不影响问答。
 > 设置页「AI 配置」的**供应商下拉**已预置以上供应商与 Base URL（Ollama、DeepSeek、OpenCode Go、通义、智谱、Kimi、小米 MiMo、硅基流动、OpenAI），选择后自动填充推荐模型，可手动修改；填入 API Key 后点击**「测试」**可验证连通性并获取模型清单（点击模型名自动填入）。
+
+### 本地 OCR（可选，离线）
+
+扫描件（图片 PDF）默认走**视觉模型** OCR（需联网/本地大模型）；也可改用**本机 Tesseract 离线识别**（免云端、免费）：设置页「AI 配置 → 图片 PDF（OCR）」勾选 **「使用本地 OCR」** 即可（无需供应商配置）。
+
+**安装方法 A（管理员 PowerShell，逐条执行）**：
+
+```powershell
+winget install UB-Mannheim.TesseractOCR
+curl.exe -L -o "C:\Program Files\Tesseract-OCR\tessdata\chi_sim.traineddata" https://github.com/tesseract-ocr/tessdata_fast/raw/main/chi_sim.traineddata
+```
+
+验证：`tesseract --list-langs` 应显示 `chi_sim`。未管理员权限时可用免提权方案（把 chi_sim.traineddata 放入 `%LOCALAPPDATA%\Tesseract-OCR\tessdata` 并设置用户环境变量 `TESSDATA_PREFIX` 指向该目录）。中文为简体；需繁体再加 `chi_tra`。启用本地 OCR 但 Tesseract/语言数据缺失时，解析失败提示中会附安装指引。
 
 ## 用法
 

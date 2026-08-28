@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from . import chunker, config, embeddings, filetype, llm, store as store_mod
@@ -95,19 +96,23 @@ def _describe_inline_images(file_path: Path, st: Store, skip_pages: set[int] | N
 
 
 def _ocr_pdf_pages(file_path: Path, st: Store, page_nos: list[int], doc_id: int | None = None) -> str:
-    """对指定页码的页面图片执行 OCR（pdf_image 通道配置）。"""
+    """对指定页码的页面图片执行 OCR（pdf_image 通道配置；0.1.46 支持本地 Tesseract）。"""
     wanted = set(page_nos)
     try:
         images = filetype.pdf_extract_page_images(file_path)
     except Exception:
         return ""
     cfg = st.get_ai_config()["pdf_image"]
+    local = bool(cfg.get("local_ocr"))
     parts = []
     for page_no, data, mime in images:
         if page_no not in wanted:
             continue
         try:
-            text = _vision_describe(cfg, data, mime, "请识别图片中的全部文字，保持原文顺序。", slot="pdf_image", doc_id=doc_id)
+            if local:
+                text = _ocr_image_tesseract(data, mime)
+            else:
+                text = _vision_describe(cfg, data, mime, "请识别图片中的全部文字，保持原文顺序。", slot="pdf_image", doc_id=doc_id)
             parts.append(f"【第 {page_no} 页】\n{text}")
         except Exception:
             continue
@@ -115,12 +120,13 @@ def _ocr_pdf_pages(file_path: Path, st: Store, page_nos: list[int], doc_id: int 
 
 
 def _ocr_pdf(file_path: Path, st: Store, doc_id: int | None = None) -> str:
-    """扫描件 PDF：逐页提取图片 → OCR 模型识别（H1 修复：补 doc_id 参数）。
+    """扫描件 PDF：逐页提取图片 → OCR（0.1.46 起可选本地 Tesseract 离线识别）。
 
     0.1.38（CH-070/CH-069）：无内嵌位图（矢量描摹/混合 PDF）时回退 pymupdf
     整页渲染 PNG 走同一 OCR 通道；渲染也失败则给出明确提示，不再笼统报"未能提取文本"。
     """
     cfg = st.get_ai_config()["pdf_image"]
+    local = bool(cfg.get("local_ocr"))
     images = filetype.pdf_extract_page_images(file_path)
     if not images:
         images = filetype.pdf_render_page_images(file_path)
@@ -131,9 +137,81 @@ def _ocr_pdf(file_path: Path, st: Store, doc_id: int | None = None) -> str:
         )
     parts = []
     for page_no, data, mime in images:
-        text = _vision_describe(cfg, data, mime, "请识别图片中的全部文字，保持原文顺序。", slot="pdf_image", doc_id=doc_id)
+        if local:
+            text = _ocr_image_tesseract(data, mime)
+        else:
+            text = _vision_describe(cfg, data, mime, "请识别图片中的全部文字，保持原文顺序。", slot="pdf_image", doc_id=doc_id)
         parts.append(f"【第 {page_no} 页】\n{text}")
     return "\n\n".join(parts)
+
+
+def _find_tesseract() -> str | None:
+    """探测本机 Tesseract 可执行文件（PATH → 常见安装路径）。"""
+    import shutil
+
+    exe = shutil.which("tesseract")
+    if exe:
+        return exe
+    cands = [
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), r"Programs\Tesseract-OCR\tesseract.exe"),
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), r"Tesseract-OCR\tesseract.exe"),
+    ]
+    for c in cands:
+        if c and os.path.exists(c):
+            return c
+    return None
+
+
+def _find_tessdata(exe: str) -> str | None:
+    """探测中文语言数据目录：TESSDATA_PREFIX → 用户级 tessdata（免提权方案）→ 安装目录 tessdata。"""
+    for p in (os.environ.get("TESSDATA_PREFIX"), os.path.join(os.environ.get("LOCALAPPDATA", ""), r"Tesseract-OCR\tessdata")):
+        if p and os.path.exists(os.path.join(p, "chi_sim.traineddata")):
+            return p
+    td = os.path.join(os.path.dirname(exe), "tessdata")
+    if os.path.exists(os.path.join(td, "chi_sim.traineddata")):
+        return td
+    return None
+
+
+def _ocr_image_tesseract(data: bytes, mime: str) -> str:
+    """本地 Tesseract OCR（0.1.46，CH-090）：图片字节 → 文本（chi_sim + eng）。
+
+    通过命令行走系统 Tesseract（https://github.com/tesseract-ocr），不引入 Python
+    重依赖；缺失时给出安装指引（README「本地 OCR：安装方法 A」）。
+    """
+    import subprocess
+    import tempfile
+
+    exe = _find_tesseract()
+    if not exe:
+        raise RuntimeError(
+            "已启用本地 OCR，但未检测到 Tesseract：请运行 `winget install UB-Mannheim.TesseractOCR` "
+            "安装，并按 README「本地 OCR」补充中文语言数据 chi_sim 后再试。"
+        )
+    td = _find_tessdata(exe)
+    if not td or not os.path.exists(os.path.join(td, "chi_sim.traineddata")):
+        raise RuntimeError(
+            "已启用本地 OCR，但缺少中文语言数据 chi_sim：请按 README「本地 OCR（安装方法 A）」"
+            "下载 chi_sim.traineddata 到 tessdata 目录（或设置 TESSDATA_PREFIX）。"
+        )
+    tmp = tempfile.TemporaryDirectory(prefix="lantai_ocr_")
+    try:
+        # 统一转 PNG（tesseract 对常见格式均可，PIL 转换最稳）
+        from io import BytesIO
+
+        from PIL import Image
+
+        img = Image.open(BytesIO(data))
+        png = os.path.join(tmp.name, "page.png")
+        img.convert("RGB").save(png)
+        cmd = [exe, png, "stdout", "-l", "chi_sim+eng", "--psm", "3", "--tessdata-dir", td]
+        r = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace", timeout=180)
+    finally:
+        tmp.cleanup()
+    if r.returncode != 0:
+        raise RuntimeError(f"本地 OCR 失败（Tesseract 退出码 {r.returncode}）：{(r.stderr or '')[:200]}")
+    return (r.stdout or "").strip()
 
 
 def process_document(doc_id: int) -> None:

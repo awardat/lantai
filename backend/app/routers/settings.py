@@ -92,6 +92,9 @@ def put_ai(body: AiConfigPut, session: str | None = Cookie(default=None, alias="
         # 0.1.39（R106）：enabled 能力开关（rerank 槽位用）
         if "enabled" in item and isinstance(item.get("enabled"), bool):
             new["enabled"] = item["enabled"]
+        # 0.1.46（CH-090）：local_ocr 本地 OCR 开关（pdf_image 槽位用）
+        if "local_ocr" in item and isinstance(item.get("local_ocr"), bool):
+            new["local_ocr"] = item["local_ocr"]
         provider = (item.get("provider") or "").strip()
         if provider not in ("", "ollama", "openai-compatible"):
             raise HTTPException(status_code=400, detail="provider 仅支持 ollama 或 openai-compatible。")
