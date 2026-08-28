@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 from . import chunker, config, embeddings, filetype, llm, store as store_mod
@@ -113,8 +114,10 @@ def _ocr_pdf_pages(file_path: Path, st: Store, page_nos: list[int], doc_id: int 
                 text = _ocr_image_tesseract(data, mime)
             else:
                 text = _vision_describe(cfg, data, mime, "请识别图片中的全部文字，保持原文顺序。", slot="pdf_image", doc_id=doc_id)
-            parts.append(f"【第 {page_no} 页】\n{text}")
-        except Exception:
+            text = _scrub_ocr_noise(text)  # 0.1.47（CH-092/A）：公式/水印页噪声清洗
+            if text:
+                parts.append(f"【第 {page_no} 页】\n{text}")
+        except Exception:  # noqa: BLE001 逐页容错（对齐 _ocr_pdf，CH-091）：坏页跳过
             continue
     return "\n\n".join(parts)
 
@@ -137,11 +140,19 @@ def _ocr_pdf(file_path: Path, st: Store, doc_id: int | None = None) -> str:
         )
     parts = []
     for page_no, data, mime in images:
-        if local:
-            text = _ocr_image_tesseract(data, mime)
-        else:
-            text = _vision_describe(cfg, data, mime, "请识别图片中的全部文字，保持原文顺序。", slot="pdf_image", doc_id=doc_id)
-        parts.append(f"【第 {page_no} 页】\n{text}")
+        # 0.1.47（CH-092/A + CH-091）：逐页容错 + OCR 噪声清洗（公式/水印页不入库）
+        try:
+            if local:
+                text = _ocr_image_tesseract(data, mime)
+            else:
+                text = _vision_describe(cfg, data, mime, "请识别图片中的全部文字，保持原文顺序。", slot="pdf_image", doc_id=doc_id)
+        except Exception as exc:  # noqa: BLE001 超时/解码失败等转中文，逐页跳过
+            continue
+        text = _scrub_ocr_noise(text)
+        if text:
+            parts.append(f"【第 {page_no} 页】\n{text}")
+    if not parts:
+        raise RuntimeError("OCR 未识别到有效文本（可能为公式/符号扫描件），未入库任何内容。")
     return "\n\n".join(parts)
 
 
@@ -172,6 +183,53 @@ def _find_tessdata(exe: str) -> str | None:
     if os.path.exists(os.path.join(td, "chi_sim.traineddata")):
         return td
     return None
+
+
+_CJK_RE = re.compile(r"[\u4e00-\u9fff]")
+_ALNUM_RE = re.compile(r"[A-Za-z0-9]")
+_LATEX_RE = re.compile(r"\\(?:text|frac|sum|int|begin|end|table|mbox|displaystyle)")
+_SAME_CHAR_RE = re.compile(r"(.)\1{5,}")
+
+
+def _scrub_ocr_noise(text: str) -> str:
+    """OCR 文本噪声清洗（0.1.47，CH-092/A，GBT 5271.18 公式扫描件教训）。
+
+    图片 PDF 含公式/符号排版时，OCR（Tesseract/视觉）会输出 `\text { 2 }`、
+    `} } }`、`1 1 1` 等 LaTeX 命令串伪文本，进入索引即污染检索且超长重复行
+    被切片放大（案例 163 切片仅 58 种文本）。规则：
+    - 行级丢弃：LaTeX 命令行 / 连续同字符 ≥6 / 无中文且无字母数字且 ASCII 符号占比 >50%（纯符号行）；
+    - 连续重复行压缩（同文本 >3 保留 3）；
+    - 清洗后为空返回 ""（该页不入库，宁缺毋滥）。
+    """
+    out: list[str] = []
+    prev = None
+    repeats = 0
+    for raw in (text or "").splitlines():
+        ln = raw.strip()
+        if not ln:
+            continue
+        if _LATEX_RE.search(ln):
+            continue
+        if _SAME_CHAR_RE.search(ln):
+            continue
+        toks = ln.split()
+        if len(toks) >= 4 and len(set(toks)) <= 2:
+            continue  # 重复短 token 行（"1 1 1…" / "} } }"）
+        has_cjk = bool(_CJK_RE.search(ln))
+        has_alnum = bool(_ALNUM_RE.search(ln))
+        if not has_cjk and not has_alnum:
+            ascii_syms = sum(1 for ch in ln if 0x21 <= ord(ch) <= 0x7E)
+            if ascii_syms > len(ln) * 0.5:
+                continue
+        if ln == prev:
+            repeats += 1
+            if repeats > 3:
+                continue
+        else:
+            repeats = 1
+            prev = ln
+        out.append(ln)
+    return "\n".join(out).strip()
 
 
 def _ocr_image_tesseract(data: bytes, mime: str) -> str:
@@ -231,6 +289,11 @@ def process_document(doc_id: int) -> None:
         if not text or not text.strip():
             raise RuntimeError("未能从文档中提取到可检索的文本内容。")
         chunks = chunker.chunk_text(text)
+        if not chunks:
+            raise RuntimeError("未能从文档中提取到可检索的文本内容。")
+        # 0.1.47（CH-092/B）：同文档切片精确去重（保留首现）——防御 OCR 噪声/重复段放大
+        seen: set[str] = set()
+        chunks = [t for t in chunks if not (t in seen or seen.add(t))]
         if not chunks:
             raise RuntimeError("未能从文档中提取到可检索的文本内容。")
         from .schemas import AiItem

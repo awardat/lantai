@@ -1,6 +1,6 @@
 # 兰台（lantai）· 本地 RAG 知识库
 
-> 版本 **0.1.46** ｜ 平台 **Windows x64**（MVP）｜ 单机部署 ｜ 无构建步骤，两步启动
+> 版本 **0.1.47** ｜ 平台 **Windows x64**（MVP）｜ 单机部署 ｜ 无构建步骤，两步启动
 
 ## 起名意境
 
@@ -88,7 +88,7 @@ winget install UB-Mannheim.TesseractOCR
 curl.exe -L -o "C:\Program Files\Tesseract-OCR\tessdata\chi_sim.traineddata" https://github.com/tesseract-ocr/tessdata_fast/raw/main/chi_sim.traineddata
 ```
 
-验证：`tesseract --list-langs` 应显示 `chi_sim`。未管理员权限时可用免提权方案（把 chi_sim.traineddata 放入 `%LOCALAPPDATA%\Tesseract-OCR\tessdata` 并设置用户环境变量 `TESSDATA_PREFIX` 指向该目录）。中文为简体；需繁体再加 `chi_tra`。启用本地 OCR 但 Tesseract/语言数据缺失时，解析失败提示中会附安装指引。
+验证：`tesseract --list-langs` 应显示 `chi_sim`。未管理员权限时可用免提权方案（把 chi_sim.traineddata 放入 `%LOCALAPPDATA%\Tesseract-OCR\tessdata` 并设置用户环境变量 `TESSDATA_PREFIX` 指向该目录）。中文为简体；需繁体再加 `chi_tra`。启用本地 OCR 但 Tesseract/语言数据缺失时，解析失败提示中会附安装指引。**OCR 结果自动清洗去噪、同文档切片去重**（公式/水印类扫描件的噪声伪文本不入库，0.1.47）。
 
 ## 用法
 
