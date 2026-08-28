@@ -84,6 +84,244 @@ def _table_to_nl(rows: list[list[str]], table_name: str) -> list[str]:
     return out
 
 
+# ---------- 0.1.44（CH-085）：电子 PDF 表格结构化（pdfplumber） ----------
+
+# 单元格内换行接续判定用的"终止符"：行尾是这些字符视为断句，否则与下一行接续
+_TABLE_STOP = set("。！？；：、，（）「」『』“”‘’…·%0123456789+-≤≥<>")
+_SECTION_RE = re.compile(r"^\d{1,2}\s*[\.、]\s*\S")
+
+
+def _merge_cell_lines(text: str) -> str:
+    """单元格内多行文本合并（CH-085 难点①）：行尾无终止符则与下行接续。
+
+    PDF 表格单元格内文本占多行，提取后呈"业务信息安\\n全保护等级"碎片；
+    按终止符判定拼接为真实内容。英文/数字跨段接续补空格（L3/CH-088：
+    避免 "ISO 27001\\nInformation" → "27001Information" 粘连）。
+    """
+    lines = [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
+    if not lines:
+        return (text or "").strip()
+    merged = [lines[0]]
+    for ln in lines[1:]:
+        prev = merged[-1]
+        if prev and prev[-1] not in _TABLE_STOP:
+            merged[-1] = prev + ln
+        else:
+            merged.append(ln)
+    out = merged[0]
+    for seg in merged[1:]:
+        # 段间同为 ASCII 字母/数字 → 补空格（"27001" + "Information"）
+        if out and seg and out[-1].isascii() and out[-1].isalnum() and seg[0].isascii() and seg[0].isalnum():
+            out += " " + seg
+        else:
+            out += seg
+    return out
+
+
+def _clean_table_rows(tbl) -> list[list[str]]:
+    """表格原始行 → 清理：空单元格归一为空串（避免 str(None)="None" 污染选表/成对）、
+    单元格换行合并、去空行、统一列宽（右补空）。"""
+    rows = []
+    for row in tbl:
+        r = [_merge_cell_lines("" if c is None else str(c)) for c in row]
+        rows.append(r)
+    rows = [r for r in rows if any(x for x in r)]
+    if not rows:
+        return []
+    nc = max(len(r) for r in rows)
+    return [r + [""] * (nc - len(r)) for r in rows]
+
+
+def _pick_best_table(pg):
+    """lattice（有线框）→ text 对齐双策略，取"非空单元格最多"的表（演示级单表/页）。
+
+    无框线 label:value 调查表（如等级保护调查表）lattice 会造 6 列假结构
+    （大量空列、行被拆），text 对齐反而给出 2~4 列紧凑结构——按非空数择优。
+    """
+    best = None
+    bs = 0
+    for strategy in (None, {"vertical_strategy": "text", "horizontal_strategy": "text"}):
+        try:
+            tables = pg.extract_tables() if strategy is None else pg.extract_tables(strategy)
+        except Exception:  # noqa: BLE001
+            tables = []
+        for t in tables:
+            rows = _clean_table_rows(t)
+            if not rows:
+                continue
+            nc = max(len(r) for r in rows)
+            if nc < 2 or nc > 10:
+                continue
+            filled = sum(1 for r in rows for c in r if c)
+            if filled > bs:
+                bs = filled
+                best = rows
+    return best
+
+
+def _row_same_header(rows, header) -> bool:
+    """跨页表头重复判定（模式 A）：当前首行与继承表头内容相同 → 是每页重复的表头。"""
+    if not rows or header is None:
+        return False
+    cur = rows[0]
+    if len(cur) != len(header):
+        return False
+    same = sum(1 for a, b in zip(cur, header) if a == b and a)
+    return same >= max(1, len(header) // 2)
+
+
+def _row_break_join(prev_last: list[str], cur_first: list[str]) -> bool:
+    """跨页文字打断判定（CH-085 难点③）：上一表最后一行的大多数非空列以非终止符
+    结尾（"存货周"@页尾）→ 判定该行被页界劈开，应与本页首行逐列拼接。"""
+    if len(prev_last) != len(cur_first):
+        return False
+    nonempty = [c for c in prev_last if c]
+    if not nonempty:
+        return False
+    broken = sum(1 for c in nonempty if c[-1] not in _TABLE_STOP)
+    return broken / len(nonempty) >= 0.6
+
+
+def _is_toc_line(text: str) -> bool:
+    """目录/占位行（'1. 单位基本信息表 ........ 25'）→ 连续点 ≥4 或省略号判别。"""
+    return "...." in text or text.count("…") >= 2
+
+
+def _kv_to_nl(rows: list[list[str]], table_name: str) -> list[str]:
+    """键值型表格（label|value 交替，本调查表类）→ "表名：标签为值，…"。
+
+    M1 修复（CH-088）：奇数宽度行末列落单时单独成句（不再静默丢失）；
+    末列为空（占位）时跳过。
+    """
+    out: list[str] = []
+    for r in rows:
+        bits: list[str] = []
+        i = 0
+        while i < len(r):
+            if i + 1 < len(r) and r[i + 1] and not _is_toc_line(r[i]):
+                bits.append(f"{r[i]}为{r[i + 1]}")
+                i += 2
+            else:
+                if r[i] and not _is_toc_line(r[i]):
+                    bits.append(r[i])  # 落单列（nc=3 的末列，如独立备注）
+                i += 1
+        if bits:
+            out.append(f"{table_name}：" + "，".join(bits))
+    return out
+
+
+def pdf_extract_tables_nl(path) -> list[tuple[str, int]]:
+    """电子 PDF 表格 → 自然语言行（0.1.44，CH-085 一期：pdfplumber，演示级单表/页）。
+
+    跨页处理：
+    - 表头重复（每页重复表头）→ 丢弃本页重复行，承接数据行；
+    - 列数一致且非重复表头 → 判定为上一表的延续（沿用表头与表名）；
+    - 列数突变 / 无上一表 → 新表（表名取所在页"节标题"如 "1. 单位基本信息表"）。
+    单元格内换行（①）与跨页行打断（③）均按终止符启发式处理；
+    键值型（2/4 列）转 "标签为值"，列式（≥3 列）走 _table_to_nl（首行表头）。
+
+    返回 [(NL 句, 页码 0 基), ...]；任何异常返回 []（表格为增强项，不影响主链路）。
+    """
+    import pdfplumber
+
+    try:
+        pdf = pdfplumber.open(str(path))
+    except Exception:  # noqa: BLE001 打不开（非标/加密/损坏）→ 无表格增强
+        return []
+    out_lines: list[tuple[str, int]] = []
+    open_tab: dict | None = None  # {name, header, rows, nc, page, last}
+    with pdf:
+        for pi, pg in enumerate(pdf.pages):
+            page_text = (pg.extract_text() or "").strip()
+            section = ""
+            for ln in page_text.splitlines():
+                s = ln.strip()
+                if len(s) <= 40 and re.match(_SECTION_RE, s):
+                    section = s  # 取页内最后一个节标题（"N. xxx"）
+            rows = _pick_best_table(pg)
+            if not rows:
+                continue
+            nc = max(len(r) for r in rows)
+            # 接续前提：列数一致 且 页节标题与上一表同名（节标题变化 = 新表，
+            # 避免 4.1 表误接续到 4.2 表）；上一表为"第N页表格"回退名时仅当
+            # 本页也无节标题才沿用（L1/CH-088：否则后续新节标题会被误接续）
+            same_section = (not section) or (open_tab is not None and open_tab["name"] == section) or (
+                open_tab is not None and open_tab["name"].startswith("第") and not section
+            )
+            if open_tab is not None and same_section and nc == open_tab["nc"]:
+                # 延续上一表：模式 A（本页首行是重复表头 → 丢弃）或模式 B（沿用表头与表名）
+                if _row_same_header(rows, open_tab["header"]):
+                    body = rows[1:]
+                    if not body:  # 纯重复表头页（每页表头 + 无续行）→ 跳过
+                        continue
+                else:
+                    body = rows
+                # 难点③：跨页行被打断 → 与上一表最后一行逐列拼接
+                if open_tab["last"] is not None and body and _row_break_join(open_tab["last"], body[0]):
+                    merged = [a + b for a, b in zip(open_tab["last"], body[0])]
+                    if open_tab["rows"]:
+                        open_tab["rows"][-1] = merged
+                    else:
+                        open_tab["rows"].append(merged)
+                    body = body[1:]
+                open_tab["rows"].extend(body)
+                open_tab["last"] = body[-1] if body else open_tab["last"]
+                continue
+            # 关闭上一表
+            if open_tab is not None:
+                out_lines.extend(_flush_table(open_tab))
+            # 新表：≥5 列（或首行明显表头）按列式表；2/4 列按键值表
+            header = rows[0] if nc >= 5 else None
+            body = rows[1:] if header is not None else rows
+            open_tab = {
+                "name": section or f"第{pi + 1}页表格",
+                "header": header,
+                "rows": body,
+                "nc": nc,
+                "page": pi,
+                "last": body[-1] if body else None,
+            }
+        if open_tab is not None:
+            out_lines.extend(_flush_table(open_tab))
+    return out_lines
+
+
+def _flush_table(tab: dict) -> list[tuple[str, int]]:
+    """把累积的逻辑表按类型转 NL 行（带页元数据）。目录页整表跳过。"""
+    rows = tab["rows"]
+    if not rows:
+        return []
+    if tab["header"] is None:
+        # 键值表：半数以上行的标签是"节编号"（如目录页 "2. 等级保护对象基本情况 ..."）→ 目录表跳过
+        labels = [r[0] for r in rows if r and r[0]]
+        section_like = sum(1 for x in labels if re.match(r"^\d{1,2}\s*[\.、]\s*\S", x) and len(x) <= 60)
+        if labels and section_like / len(labels) >= 0.5:
+            return []
+        lines = _kv_to_nl(rows, tab["name"])
+    else:
+        lines = _table_to_nl([tab["header"]] + rows, tab["name"])
+    return [(ln, tab["page"]) for ln in lines]
+
+
+def _pages_with_tables(path, pages_out: list[tuple[str, bool]]) -> list[tuple[str, bool]]:
+    """CH-085：把 PDF 表格 NL 行按页附加到文本页末尾（预览与入库走同一路径）。"""
+    try:
+        lines = pdf_extract_tables_nl(path)
+    except Exception:  # noqa: BLE001 表格增强失败不阻塞主链路
+        return pages_out
+    if not lines:
+        return pages_out
+    by_page: dict[int, list[str]] = {}
+    for ln, pg in lines:
+        by_page.setdefault(pg, []).append(ln)
+    out: list[tuple[str, bool]] = []
+    for i, (text, ok) in enumerate(pages_out):
+        if ok and i in by_page:
+            text = text.rstrip("\n") + "\n" + "\n".join(by_page[i])
+        out.append((text, ok))
+    return out
+
+
 def parse_docx(path: Path) -> str:
     """docx → 段落 + 表格文本（表格行转自然语言，CH-084）。"""
     from docx import Document  # python-docx
@@ -382,7 +620,7 @@ def pdf_text_layers(path: Path) -> list[tuple[str, bool]]:
                 out.append((t, True))
             else:
                 out.append(("", False))
-        return out
+        return _pages_with_tables(path, out)
 
     page_lines: list[list[tuple[str, float, float, float, float]]] = []
     all_lines: list[str] = []
@@ -422,7 +660,7 @@ def pdf_text_layers(path: Path) -> list[tuple[str, bool]]:
             pages_out.append((fallback, True))
         else:
             pages_out.append((text, False))
-    return pages_out
+    return _pages_with_tables(path, pages_out)
 
 
 def _layout_order(
