@@ -154,6 +154,7 @@ backend/data/          # 运行时生成 rag.db、uploads/（gitignore）
 - ✅ 已执行：0.1.45（用户提出 A+C 方案、C 改为一次性脚本，CH-089）：**文档重新解析**——A `POST /api/docs/{id}/reparse`（任意非 parsing 状态：清旧切片含 BM25 同步 → 置 queued → 入队；ready 也允许）＋前端 ready 行「重新解析」按钮；B 一次性脚本 `scripts/reparse_all.py`（遍历 ready/failed 调 reparse 接口，--host/--ids；上传逻辑与重名语义不变）；实测 reparse 替换切片 ✅、脚本批量入队 ✅。
 - ✅ 已执行：0.1.46（用户提出，CH-090）：**本地 OCR（Tesseract）可选通道**——设置页「图片 PDF（OCR）」新增「使用本地 OCR」开关（AiItem.local_ocr）；`pipeline._ocr_image_tesseract`（chi_sim+eng，探测 PATH/常见路径/`TESSDATA_PREFIX`/用户级 tessdata，PIL 转 PNG 进程调用）；缺 Tesseract/chi_sim 时失败附安装指引；README「本地 OCR」安装方法 A；实测中文图 OCR ✅、图片 PDF local_ocr=true 解析切片 `【第 1 页】网络安全等级保护测评表` ✅；分类表 §4.3 pdf_image 行已补（CH-087 必答=是→改）。
 - ✅ 已执行：0.1.47（用户"做A+B，连前面队列一起执行"，CH-092 + CH-091）：**OCR 噪声清洗 + 切片去重**——A `pipeline._scrub_ocr_noise`（LaTeX/纯符号/连续同字符/重复短 token 行过滤 + 重复行压缩 + 清洗空页不入库）；B 同文档切片 text 精确去重；CH-091 本地 OCR 页循环逐页 try 容错（坏页跳过）；实测 GBT 5271.18（公式扫描件）本地 OCR 重解析 **163→22 切块、distinct=22、噪声残留 0**；分类表 §4.3 pdf_image 行补清洗机制（CH-087 必答=是→改）。
+- ✅ 已执行：0.1.48（用户报告"agent 日志似乎掉了"，CH-093）：**本地 OCR 进 agent 日志**——`_ocr_image_tesseract` 成功/失败写 agent_log（slot=ocr_local：图片字节/mime/耗时/answer 识别文字/ok；主体抽 `_run_tesseract` 无日志）；修复 `_scrub_ocr_noise` 连续同字符正则误杀多空格分隔 OCR 行（`(.)\1{5,}`→`([^ \t])\1{5,}`，此前"日志可见性测试"图解析 failed）；实测 agent 日志可见识别中文 ✅、解析 ready ✅。
 - 📋 备忘（CH-086，queue）：**投研 Agent 方案借鉴**——双引擎分离（计算 Python/推理 LLM）、轻量知识图谱 NetworkX（引用/依赖关系）、结构化溯源（source/page/field）、MCP 按分析场景封装；表格不进 Embedding 已由 CH-084 应对。
 - ⏳ **等待用户确认**后再进入后续迭代（RBAC、多平台、Docker、档位 3 等均只入需求与文档）。
 

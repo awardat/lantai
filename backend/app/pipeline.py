@@ -188,7 +188,7 @@ def _find_tessdata(exe: str) -> str | None:
 _CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 _ALNUM_RE = re.compile(r"[A-Za-z0-9]")
 _LATEX_RE = re.compile(r"\\(?:text|frac|sum|int|begin|end|table|mbox|displaystyle)")
-_SAME_CHAR_RE = re.compile(r"(.)\1{5,}")
+_SAME_CHAR_RE = re.compile(r"([^ \t])\1{5,}")  # 非空白连续同字符 ≥6（空格串不判噪声：OCR 常用多空格分隔字词）
 
 
 def _scrub_ocr_noise(text: str) -> str:
@@ -237,7 +237,34 @@ def _ocr_image_tesseract(data: bytes, mime: str) -> str:
 
     通过命令行走系统 Tesseract（https://github.com/tesseract-ocr），不引入 Python
     重依赖；缺失时给出安装指引（README「本地 OCR：安装方法 A」）。
+    0.1.48（CH-093）：成功/失败均写 agent_log（slot=ocr_local）——识别出的文字
+    可在 agent-*.log 中查看（此前本地 OCR 不进日志，用户误以为"日志掉了"）。
     """
+    import time
+
+    from . import agent_log
+
+    t0 = time.monotonic()
+    msg = [{"role": "user", "content": f"本地 OCR（Tesseract，{mime or 'image'}）：识别页图数据 {len(data)} 字节"}]
+    try:
+        text = _run_tesseract(data)
+    except Exception as exc:  # noqa: BLE001
+        agent_log.log_call(
+            slot="ocr_local", provider="local", base_url="tesseract", model="chi_sim+eng",
+            messages=msg, ok=False, error=str(exc),
+            duration_ms=int((time.monotonic() - t0) * 1000),
+        )
+        raise
+    agent_log.log_call(
+        slot="ocr_local", provider="local", base_url="tesseract", model="chi_sim+eng",
+        messages=msg, answer=(text or "(空)"),
+        duration_ms=int((time.monotonic() - t0) * 1000), ok=True,
+    )
+    return text
+
+
+def _run_tesseract(data: bytes) -> str:
+    """Tesseract 主体调用（探测/校验/PIL 转 PNG/子进程），不含日志。"""
     import subprocess
     import tempfile
 
