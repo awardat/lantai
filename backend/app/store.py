@@ -210,8 +210,7 @@ class Store:
         仅由排除了 parsing 状态的调用方触发。"""
         with self._lock:
             with self._connect() as conn:
-                conn.execute("DELETE FROM chunks_fts WHERE rowid IN (SELECT id FROM chunks WHERE document_id=?)", (doc_id,))
-                conn.execute("DELETE FROM chunks WHERE document_id=?", (doc_id,))
+                self._purge_chunks(conn, doc_id)
                 conn.execute("UPDATE documents SET status='queued', error=NULL, chunk_count=0 WHERE id=?", (doc_id,))
                 conn.commit()
 
@@ -225,9 +224,24 @@ class Store:
         rows = self._query("SELECT * FROM documents WHERE id=?", (doc_id,))
         return dict(rows[0]) if rows else None
 
-    def list_documents(self) -> list[dict]:
-        rows = self._query("SELECT * FROM documents ORDER BY id DESC")
-        return [dict(r) for r in rows]
+    def list_documents(self, page: int | None = None, size: int | None = None, status: str | None = None) -> dict | list[dict]:
+        """文档列表（0.1.49，CH-094：可选分页 + 状态过滤）。
+
+        无参数 → 全量数组（兼容既有调用/脚本/Dify）；带 page/size → 返回
+        {total, page, page_size, items, stats}——total/items 按 status 过滤后分页，
+        stats 为**全量**各状态计数（前端筛选按钮显示全局数量）。
+        """
+        rows = [dict(r) for r in self._query("SELECT * FROM documents ORDER BY id DESC")]
+        if page is None or size is None:
+            return rows
+        stats: dict[str, int] = {"ready": 0, "queued": 0, "parsing": 0, "failed": 0}
+        for r in rows:
+            stats[r["status"]] = stats.get(r["status"], 0) + 1
+        pool = [r for r in rows if not status or r["status"] == status]
+        total = len(pool)
+        start = (page - 1) * size
+        items = pool[start : start + size]
+        return {"total": total, "page": page, "page_size": size, "items": items, "stats": stats}
 
     def list_pending_ids(self) -> list[int]:
         """排队/解析中的文档 ID（服务重启恢复解析队列用）。"""
@@ -240,22 +254,44 @@ class Store:
             return None
         with self._lock:
             with self._connect() as conn:
-                conn.execute("DELETE FROM chunks_fts WHERE rowid IN (SELECT id FROM chunks WHERE document_id=?)", (doc_id,))
-                conn.execute("DELETE FROM chunks WHERE document_id=?", (doc_id,))
+                self._purge_chunks(conn, doc_id)
                 conn.execute("DELETE FROM documents WHERE id=?", (doc_id,))
                 conn.commit()
         return doc
 
     # ------------------------------------------------------------ 切片与向量
+    def _purge_chunks(self, conn, doc_id: int) -> None:
+        """关联清理主切片与 BM25 索引（唯一删除出口，保证一致性，0.1.49 CH-094）：
+        先清 FTS（子查询基于 chunks 表此刻仍存在）再删主表——顺序颠倒会恒空致孤儿累积。"""
+        conn.execute("DELETE FROM chunks_fts WHERE rowid IN (SELECT id FROM chunks WHERE document_id=?)", (doc_id,))
+        conn.execute("DELETE FROM chunks WHERE document_id=?", (doc_id,))
+
+    def gc_orphan_chunks(self) -> int:
+        """清理孤儿切片（document_id 已无对应 documents 行）并同步 FTS（0.1.49 CH-094）。
+
+        历史删除/重建路径曾留下无主切片（如 sample 库 2 万+ 条：doc 201/483/516 已删但
+        chunks 残留）；启动时调用一次兜底，保证"chunks 恒有主"。返回清理条数。
+        """
+        with self._lock:
+            with self._connect() as conn:
+                conn.execute(
+                    "DELETE FROM chunks_fts WHERE rowid IN (SELECT id FROM chunks "
+                    "WHERE document_id NOT IN (SELECT id FROM documents))"
+                )
+                cur = conn.execute(
+                    "DELETE FROM chunks WHERE document_id NOT IN (SELECT id FROM documents)"
+                )
+                conn.commit()
+                return cur.rowcount or 0
+
     def clear_chunks(self, doc_id: int) -> None:
         """幂等化（CH-058/M4）：删除文档既有切片，供重解析前清理——
         崩溃恢复重解析（requeue_pending）可能使同一文档切片重复入库。
         同步清理 BM25 索引（0.1.39 R107；CH-076 修复 M1：先清 FTS 再删主表，
-        顺序颠倒会导致子查询恒空、FTS 孤儿行无限累积）。"""
+        顺序颠倒会导致子查询恒空、FTS 孤儿行无限累积；0.1.49 收敛到 _purge_chunks）。"""
         with self._lock:
             with self._connect() as conn:
-                conn.execute("DELETE FROM chunks_fts WHERE rowid IN (SELECT id FROM chunks WHERE document_id=?)", (doc_id,))
-                conn.execute("DELETE FROM chunks WHERE document_id=?", (doc_id,))
+                self._purge_chunks(conn, doc_id)
                 conn.commit()
 
     def add_chunks(self, doc_id: int, texts: list[str], embeddings: np.ndarray) -> int:

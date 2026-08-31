@@ -204,10 +204,36 @@ function startPolling() {
   }, 2000);
 }
 
+// 0.1.49（CH-094）：文档清单分页状态（每页 20/50/100，默认 20）
+let docPage = 1, docPageSize = 20, docTotal = 0;
+
 async function loadDocs() {
-  const docs = await api("/api/docs");
-  renderDocs(docs);
-  if (docs.some((d) => d.status === "parsing" || d.status === "queued")) startPolling();
+  const q = `/api/docs?page=${docPage}&page_size=${docPageSize}&status=${encodeURIComponent(docFilter)}`;
+  const data = await api(q);
+  // 删除/过滤后页码越界 → 回退到最后一页
+  const totalPages = Math.max(1, Math.ceil(data.total / docPageSize));
+  if (docPage > totalPages) { docPage = totalPages; return loadDocs(); }
+  docTotal = data.total;
+  renderDocs(data.items);
+  updateDocCounts(data.stats);
+  renderPager(totalPages);
+  if (data.items.some((d) => d.status === "parsing" || d.status === "queued")) startPolling();
+}
+
+function renderPager(totalPages) {
+  const el = $("#doc-pager");
+  if (!el) return;
+  el.innerHTML = `
+    <span>共 ${docTotal} 条</span>
+    <button class="mini-btn" onclick="docPage>1&&(docPage--,loadDocs())" ${docPage <= 1 ? "disabled" : ""}>‹ 上一页</button>
+    <span>第 ${docPage} / ${totalPages} 页</span>
+    <button class="mini-btn" onclick="docPage<${totalPages}&&(docPage++,loadDocs())" ${docPage >= totalPages ? "disabled" : ""}>下一页 ›</button>
+    <label>每页
+      <select onchange="docPageSize=parseInt(this.value,10);docPage=1;loadDocs()">
+        ${[20, 50, 100].map((n) => `<option value="${n}" ${n === docPageSize ? "selected" : ""}>${n}</option>`).join("")}
+      </select>
+      条
+    </label>`;
 }
 
 /* ---- 解析队列设置（0.1.18） ---- */
@@ -262,26 +288,23 @@ const retryCatOptions = '<option value="">按原类型</option>' + RETRY_CATEGOR
 // 文件计数 + 分类筛选联动（0.1.37，用户提出）：筛选按钮实时显示各状态文件数
 const FILTER_LABELS = { "": "全部", ready: "已就绪", queued: "排队中", parsing: "解析中", failed: "失败" };
 
-function updateDocCounts(docs) {
-  const counts = { "": docs.length, ready: 0, queued: 0, parsing: 0, failed: 0 };
-  for (const d of docs) if (counts[d.status] !== undefined) counts[d.status]++;
+function updateDocCounts(stats) {
+  const counts = stats || { ready: 0, queued: 0, parsing: 0, failed: 0 };
   document.querySelectorAll("#doc-filter .filter-btn").forEach((btn) => {
     const st = btn.dataset.status || "";
-    btn.textContent = `${FILTER_LABELS[st] || st} (${counts[st]})`;
+    btn.textContent = `${FILTER_LABELS[st] || st} (${st === "" ? Object.values(counts).reduce((a, b) => a + (b || 0), 0) : counts[st] || 0})`;
   });
 }
 
 function renderDocs(docs) {
   const tbody = $("#doc-tbody");
-  // 文件计数（0.1.37）：全量统计后渲染到筛选按钮（计数与筛选联动，轮询期间实时更新）
-  updateDocCounts(docs);
-  // 状态筛选（0.1.34，CH-060）：按当前筛选状态过滤后渲染
-  const filtered = docFilter ? docs.filter((d) => d.status === docFilter) : docs;
-  if (!filtered.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="7">${docs.length ? "没有符合当前筛选条件的文档" : "暂无文档，点击右上角「上传文档」开始"}</td></tr>`;
+  // 0.1.37 计数由后端 stats 提供（0.1.49 分页后前端不再持有全量列表）
+  // 状态筛选（0.1.34/0.1.49）：服务端已按 docFilter 过滤并分页
+  if (!docs.length) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="7">${docTotal ? "没有符合当前筛选条件的文档" : "暂无文档，点击右上角「上传文档」开始"}</td></tr>`;
     return;
   }
-  tbody.innerHTML = filtered.map((d) => {
+  tbody.innerHTML = docs.map((d) => {
     const stateMap = { ready: ["ready", "已就绪"], failed: ["failed", "失败"], queued: ["queued", "排队中"], parsing: ["parsing", "解析中…"] };
     const [stateCls, stateText] = stateMap[d.status] || ["parsing", d.status];
     // 失败原因悬停提示：escAttr 转义引号，避免 error 含 " 破坏 title 属性（CH-060/M1）
@@ -341,6 +364,7 @@ document.querySelectorAll("#doc-filter .filter-btn").forEach((btn) => {
     document.querySelectorAll("#doc-filter .filter-btn").forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
     docFilter = btn.dataset.status || "";
+    docPage = 1; // 0.1.49：切换筛选回到第一页
     loadDocs();
   });
 });

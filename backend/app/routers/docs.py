@@ -57,7 +57,23 @@ def upload_document(file: UploadFile = File(...)):
 
 
 @router.get("")
-def list_documents():
+def list_documents(page: int | None = None, page_size: int | None = None, status: str | None = None):
+    """文档列表（0.1.49，CH-094：可选分页，每页 20/50/100 默认 20；可选状态过滤）。
+
+    不带分页参数 → 返回全量数组（兼容脚本/旧调用）；带 page 时 →
+    data = {total, page, page_size, items, stats}（stats 为全量各状态计数）。
+    """
+    if page is not None:
+        page_size = page_size or 20
+        if page_size not in (20, 50, 100):
+            raise HTTPException(status_code=400, detail="page_size 仅支持 20 / 50 / 100。")
+        if page < 1:
+            raise HTTPException(status_code=400, detail="page 从 1 开始。")
+        if status and status not in ("ready", "queued", "parsing", "failed"):
+            raise HTTPException(status_code=400, detail="status 仅支持 ready / queued / parsing / failed。")
+        data = store.list_documents(page=page, size=page_size, status=status or None)
+        data["items"] = [_doc_out(d).model_dump() for d in data["items"]]
+        return ok(data)
     docs = [_doc_out(d).model_dump() for d in store.list_documents()]
     return ok(docs)
 

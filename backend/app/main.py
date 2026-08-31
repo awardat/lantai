@@ -34,6 +34,13 @@ async def lifespan(app: FastAPI):
     if recovered:
         logger.info("解析队列恢复 %s 个待解析文档", recovered)
     st = Store()
+    # 0.1.49（CH-094）：启动时清理孤儿切片（文档已删但 chunks 残留的历史脏数据）
+    try:
+        orphan = st.gc_orphan_chunks()
+        if orphan:
+            logger.info("已清理孤儿切片 %s 条（无对应文档）", orphan)
+    except Exception:  # noqa: BLE001 清理失败不阻塞启动
+        logger.warning("孤儿切片清理失败，忽略")
     # 首次启动初始化：默认配置密码 / 会话密钥 / 版本号
     if not st.get_setting("admin_password_hash"):
         st.set_setting("admin_password_hash", security.hash_password(config.DEFAULT_ADMIN_PASSWORD))

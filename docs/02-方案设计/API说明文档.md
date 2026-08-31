@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 |------|------|
 | 产品名称 | 兰台（lantai）本地 RAG 知识库 |
-| 文档版本 | V1.46（对应应用 0.1.48） |
+| 文档版本 | V1.47（对应应用 0.1.49） |
 | 生成时间 | 2026-08-23 |
 | 数据来源 | 技术对接方案.md、PRD产品需求文档.md（§6）、数据库设计文档.md |
 | 适用范围 | 前端调用与外部程序集成（API token） |
@@ -88,7 +88,13 @@ curl -F "file=@./兰台简介.txt" http://127.0.0.1:8000/api/docs/upload
 
 ### 2.2 文档列表
 
-`GET /api/docs` → `data` 为 DocumentOut 数组（按上传时间倒序）。
+`GET /api/docs` → 不带分页参数时 `data` 为 DocumentOut 数组（按上传时间倒序，兼容脚本/轮询）。
+
+**可选分页（V1.47 新增，0.1.49，CH-094）**：`GET /api/docs?page=1&page_size=20&status=` →
+
+- `page_size` ∈ `{20,50,100}`（默认 20），非法 400 `page_size 仅支持 20 / 50 / 100。`
+- `status` ∈ `ready/queued/parsing/failed`（可空=全部），非法 400
+- `data` = `{"total": 总数, "page": 页码, "page_size": 每页条数, "items": [DocumentOut...], "stats": {"ready":n,"queued":n,"parsing":n,"failed":n}}`（stats 为**全量**各状态计数，供前端筛选按钮显示；total/items 按 status 过滤后分页）
 
 ### 2.3 文档详情
 
@@ -371,7 +377,7 @@ data: {"type": "done"}
 ```json
 {
   "code": 0, "message": "ok",
-  "data": {"version": "0.1.48", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
+  "data": {"version": "0.1.49", "platform": "win32 / AMD64", "data_dir": "C:\\…\\data"}
 }
 ```
 
@@ -478,7 +484,7 @@ with httpx.Client(base_url="http://127.0.0.1:8000") as c:
 
 ---
 
-**文档状态**: API 说明 V1.46（与应用 0.1.48 同步）
+**文档状态**: API 说明 V1.47（与应用 0.1.49 同步）
 **生成时间**: 2026-08-23
 **前置文档**: 技术对接方案.md、PRD产品需求文档.md、数据库设计文档.md
 **变更规则**: 接口变更时本文件随版本同步更新（0.1.1 → 0.1.2 → …）
