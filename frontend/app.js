@@ -184,12 +184,13 @@ async function uploadFiles(files) {
 }
 
 let pollTimer = null;
+// 0.1.49（CH-094）轮询修正：与 loadDocs 同走分页/筛选（stats 为全量计数，
+// 用其判断是否仍有解析队列活动，不再用全量列表渲染覆盖翻页/筛选）
+let lastStats = null;
 function startPolling() {
   if (pollTimer) return;
   pollTimer = setInterval(async () => {
-    const docs = await api("/api/docs").catch(() => null);
-    if (!docs) return;
-    renderDocs(docs);
+    await loadDocs();
     // 解析状态仅在「设置 → 解析」Tab 激活且已登录时刷新：
     // 未登录时调用需会话的 /api/settings/parse 会 401 刷日志（0.1.31，CH-056）；
     // Tab 显隐由 .stab-body.active 控制（非 .hidden），0.1.32（CH-058/M2）修正判断
@@ -197,7 +198,7 @@ function startPolling() {
     if (parseTabActive && localStorage.getItem("lantai_session")) {
       refreshParseStatus();
     }
-    if (!docs.some((d) => d.status === "parsing" || d.status === "queued")) {
+    if (lastStats && !(lastStats.parsing || lastStats.queued)) {
       clearInterval(pollTimer);
       pollTimer = null;
     }
@@ -214,6 +215,7 @@ async function loadDocs() {
   const totalPages = Math.max(1, Math.ceil(data.total / docPageSize));
   if (docPage > totalPages) { docPage = totalPages; return loadDocs(); }
   docTotal = data.total;
+  lastStats = data.stats;
   renderDocs(data.items);
   updateDocCounts(data.stats);
   renderPager(totalPages);
