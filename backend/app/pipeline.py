@@ -97,26 +97,39 @@ def _describe_inline_images(file_path: Path, st: Store, skip_pages: set[int] | N
 
 
 def _ocr_pdf_pages(file_path: Path, st: Store, page_nos: list[int], doc_id: int | None = None) -> str:
-    """对指定页码的页面图片执行 OCR（pdf_image 通道配置；0.1.46 支持本地 Tesseract）。"""
+    """对指定页码的页面图片执行 OCR（pdf_image 通道配置；0.1.46 支持本地 Tesseract）。
+
+    0.1.52（CH-102）：与 _ocr_pdf 同款逐页混合——位图优先、缺位图/位图为空用渲染图兜底。
+    """
     wanted = set(page_nos)
-    try:
-        images = filetype.pdf_extract_page_images(file_path)
-    except Exception:
-        return ""
     cfg = st.get_ai_config()["pdf_image"]
     local = bool(cfg.get("local_ocr"))
+    bitmaps: dict[int, tuple[bytes, str]] = {}
+    rendered: dict[int, tuple[bytes, str]] = {}
+    try:
+        for pn, data, mime in filetype.pdf_extract_page_images(file_path):
+            bitmaps[pn] = (data, mime)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        for pn, data, mime in filetype.pdf_render_page_images(file_path):
+            rendered[pn] = (data, mime)
+    except Exception:  # noqa: BLE001
+        pass
     parts = []
-    for page_no, data, mime in images:
-        if page_no not in wanted:
+    for pn in sorted(wanted):
+        if pn not in bitmaps and pn not in rendered:
             continue
         try:
-            if local:
-                text = _ocr_image_tesseract(data, mime)
-            else:
-                text = _vision_describe(cfg, data, mime, "请识别图片中的全部文字，保持原文顺序。", slot="pdf_image", doc_id=doc_id)
-            text = _scrub_ocr_noise(text)  # 0.1.47（CH-092/A）：公式/水印页噪声清洗
+            text = ""
+            if pn in bitmaps:
+                text = _ocr_image_tesseract(*bitmaps[pn]) if local else _vision_describe(cfg, *bitmaps[pn], "请识别图片中的全部文字，保持原文顺序。", slot="pdf_image", doc_id=doc_id)
+                text = _scrub_ocr_noise(text)
+            if not text and pn in rendered:
+                text = _ocr_image_tesseract(*rendered[pn]) if local else _vision_describe(cfg, *rendered[pn], "请识别图片中的全部文字，保持原文顺序。", slot="pdf_image", doc_id=doc_id)
+                text = _scrub_ocr_noise(text)  # 0.1.47（CH-092/A）：公式/水印页噪声清洗
             if text:
-                parts.append(f"【第 {page_no} 页】\n{text}")
+                parts.append(f"【第 {pn} 页】\n{text}")
         except Exception:  # noqa: BLE001 逐页容错（对齐 _ocr_pdf，CH-091）：坏页跳过
             continue
     return "\n\n".join(parts)
@@ -127,31 +140,61 @@ def _ocr_pdf(file_path: Path, st: Store, doc_id: int | None = None) -> str:
 
     0.1.38（CH-070/CH-069）：无内嵌位图（矢量描摹/混合 PDF）时回退 pymupdf
     整页渲染 PNG 走同一 OCR 通道；渲染也失败则给出明确提示，不再笼统报"未能提取文本"。
+    0.1.52（CH-102 根因修正）：**逐页混合**——位图优先，位图 OCR 为空时回退该页
+    渲染图兜底；修复"少量装饰位图（如封面 TIFF）占用提取结果、渲染回退被整体跳过、
+    正文全靠渲染的 PDF 全页丢失"（GBT 21054-2023 案例：1 张 6KB 装饰 TIFF → 全文失败）。
     """
     cfg = st.get_ai_config()["pdf_image"]
     local = bool(cfg.get("local_ocr"))
-    images = filetype.pdf_extract_page_images(file_path)
-    if not images:
-        images = filetype.pdf_render_page_images(file_path)
-    if not images:
+    bitmaps: dict[int, tuple[bytes, str]] = {}
+    try:
+        for pn, data, mime in filetype.pdf_extract_page_images(file_path):
+            bitmaps[pn] = (data, mime)
+    except Exception:  # noqa: BLE001
+        pass
+    rendered: dict[int, tuple[bytes, str]] = {}
+    try:
+        for pn, data, mime in filetype.pdf_render_page_images(file_path):
+            rendered[pn] = (data, mime)
+    except Exception:  # noqa: BLE001
+        pass
+    if not bitmaps and not rendered:
         raise RuntimeError(
             "该 PDF 无内嵌位图且无法整页渲染（可能是矢量描摹或空白页），"
             "无法执行 OCR，请提供位图版文件。"
         )
+    pages = sorted(set(bitmaps) | set(rendered))
     parts = []
-    for page_no, data, mime in images:
+    fail_reasons: list[str] = []
+    for pn in pages:
         # 0.1.47（CH-092/A + CH-091）：逐页容错 + OCR 噪声清洗（公式/水印页不入库）
+        text = ""
         try:
-            if local:
-                text = _ocr_image_tesseract(data, mime)
-            else:
-                text = _vision_describe(cfg, data, mime, "请识别图片中的全部文字，保持原文顺序。", slot="pdf_image", doc_id=doc_id)
+            if pn in bitmaps:
+                if local:
+                    text = _ocr_image_tesseract(*bitmaps[pn])
+                else:
+                    text = _vision_describe(cfg, *bitmaps[pn], "请识别图片中的全部文字，保持原文顺序。", slot="pdf_image", doc_id=doc_id)
+                text = _scrub_ocr_noise(text)
+            if not text and pn in rendered:  # 位图为空（装饰图）→ 该页渲染兜底
+                if local:
+                    text = _ocr_image_tesseract(*rendered[pn])
+                else:
+                    text = _vision_describe(cfg, *rendered[pn], "请识别图片中的全部文字，保持原文顺序。", slot="pdf_image", doc_id=doc_id)
+                text = _scrub_ocr_noise(text)
         except Exception as exc:  # noqa: BLE001 超时/解码失败等转中文，逐页跳过
+            fail_reasons.append(str(exc))
             continue
-        text = _scrub_ocr_noise(text)
         if text:
-            parts.append(f"【第 {page_no} 页】\n{text}")
+            parts.append(f"【第 {pn} 页】\n{text}")
     if not parts:
+        # 0.1.52（CH-102）：全页失败时透传真实原因（如缺 Tesseract/chi_sim），
+        # 不再用"公式/符号扫描件"猜测误导（页循环吞掉的具体错误在此汇总）
+        if fail_reasons:
+            from collections import Counter
+
+            reason = Counter(fail_reasons).most_common(1)[0][0]
+            raise RuntimeError(f"OCR 全部页失败：{reason[:150]}")
         raise RuntimeError("OCR 未识别到有效文本（可能为公式/符号扫描件），未入库任何内容。")
     return "\n\n".join(parts)
 

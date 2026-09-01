@@ -1,7 +1,7 @@
 {
   "name": "lantai-shell",
   "private": true,
-  "version": "0.1.51",
+  "version": "0.1.52",
   "description": "兰台（lantai）本地 RAG 知识库桌面壳：内嵌终端 + WebView 包装",
   "type": "module",
   "scripts": {
